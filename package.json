@@ -1,0 +1,10 @@
+{
+  "name": "amethyst",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Amethyst: a property-trading board game for phones. One phone is the table, the others join with its code.",
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  }
+}
