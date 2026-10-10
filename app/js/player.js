@@ -10,7 +10,8 @@ export function startPlayer(root, { code, tableCode, name, token, onHome }) {
   let ui = { tab: 'hand', space: null };
   let status = 'connecting';
 
-  const link = new Link({
+  let link = null; // the Link constructor already calls onStatus, so declare first
+  link = new Link({
     code,
     onOpen: () => link.send({ t: 'hello', name, token }),
     onMessage: (msg, from) => {

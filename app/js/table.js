@@ -16,7 +16,8 @@ export function startTable(root, { code, onHome }) {
   let ui = { tab: 'board', sheet: false };
   const names = new Map(); // code -> name said in hello, for the lobby
 
-  const link = new Link({
+  let link = null; // assigned below; the Link constructor already calls onStatus
+  link = new Link({
     code,
     onMessage: (msg, from, who) => {
       if (from !== 'controller') return;
@@ -57,6 +58,7 @@ export function startTable(root, { code, onHome }) {
   const sendLocal = (action) => dispatch(action, code);
 
   function render() {
+    if (!link) return;
     const online = new Set(link.controllerCodes);
     if (s.phase === 'lobby') return renderLobby(online);
     const hostPlaying = !!player(s, code);

@@ -64,6 +64,7 @@ function home() {
 
 go(load('am.mode', null));
 
-if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+// Offline shell cache, only on the real site (on localhost it would hide fresh edits).
+if ('serviceWorker' in navigator && location.protocol === 'https:') {
   navigator.serviceWorker.register('sw.js').catch(() => {});
 }

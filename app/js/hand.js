@@ -47,7 +47,7 @@ export function renderHand(root, s, meId, send, ui) {
           ${me.jailFree ? `<button data-act="jailCard">Use card</button>` : ''}
         </div>`;
     } else {
-      now = `<p class="muted">${s.doubles ? 'Doubles! Roll again.' : 'Your turn.'} ${diceHtml(s.dice)}</p><button class="pri xl" data-act="roll">Roll</button>`;
+      now = `<p class="muted">${s.doubles ? `Doubles! ${diceHtml(s.dice)} Roll again.` : 'Your turn.'}</p><button class="pri xl" data-act="roll">Roll</button>`;
     }
   } else {
     now = `<p class="muted">${diceHtml(s.dice)} You're on ${esc(SPACES[me.pos].name)}.</p><button class="pri xl" data-act="endTurn">End turn</button>`;
