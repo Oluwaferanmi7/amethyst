@@ -1,25 +1,31 @@
-// Home screen and routing. A phone is either the table (hosts the game) or a player
-// (joins a table by its code). The last choice is remembered so the app reopens there.
+// Home screen and routing. The app keeps ONE phone-to-phone link for its whole life;
+// screens (table / player) borrow it. A phone is either the table or a player, and the
+// last choice is remembered so the app reopens there.
 
+import { Link } from './link.js';
 import { startTable } from './table.js';
 import { startPlayer } from './player.js';
 import { TOKENS } from './board.js';
-import { esc } from './render.js';
+import { esc, confirmTap } from './render.js';
 import { load, save, remove, deviceCode, cleanCode } from './store.js';
+import { sound } from './sound.js';
 
 const root = document.getElementById('app');
 const code = deviceCode();
+const link = new Link({ code });
 let screen = null;
+
+document.addEventListener('pointerdown', () => sound.unlock(), { once: true, capture: true });
 
 function go(mode) {
   screen?.stop?.();
   screen = null;
   if (mode?.mode === 'table') {
-    save('am.mode', mode);
-    screen = startTable(root, { code, onHome: () => go(null) });
+    save('am.mode', { mode: 'table' });
+    screen = startTable(root, { code, link, fresh: !!mode.fresh, onHome: () => go(null) });
   } else if (mode?.mode === 'player') {
     save('am.mode', mode);
-    screen = startPlayer(root, { code, tableCode: mode.tableCode, name: mode.name, token: mode.token, onHome: () => go(null) });
+    screen = startPlayer(root, { code, link, tableCode: mode.tableCode, name: mode.name, token: mode.token, onHome: () => go(null) });
   } else {
     remove('am.mode');
     home();
@@ -28,14 +34,15 @@ function go(mode) {
 
 function home() {
   const last = load('am.join', { name: '', token: TOKENS[0], tableCode: '' });
-  const hasGame = !!load('am.table.state', null);
+  const saved = load('am.table.state', null);
+  const inProgress = saved && saved.phase === 'play';
   root.innerHTML = `
     <div class="home">
       <div class="logo"><span>◆</span><h1>Amethyst</h1><p>Buy the block. Bankrupt your friends.</p></div>
       <section class="homecard">
         <h2>Host a table</h2>
         <p class="muted">This phone shows the board and runs the game. Friends join with its code <b>${code}</b>.</p>
-        <button class="pri" data-table>${hasGame ? 'Open the table (game in progress)' : 'Host a table'}</button>
+        ${inProgress ? `<button class="pri" data-table>Continue the game in progress</button><button data-table-fresh>Start a fresh table</button>` : `<button class="pri" data-table-fresh>Host a table</button>`}
       </section>
       <section class="homecard">
         <h2>Join a table</h2>
@@ -48,7 +55,10 @@ function home() {
       </section>
       <p class="muted center small">This phone's code: ${code}. Everyone needs internet; phones talk to each other directly.</p>
     </div>`;
-  root.querySelector('[data-table]').addEventListener('click', () => go({ mode: 'table' }));
+  root.querySelector('[data-table]')?.addEventListener('click', () => go({ mode: 'table' }));
+  const fresh = root.querySelector('[data-table-fresh]');
+  if (fresh && inProgress) confirmTap(fresh, 'Tap again to throw the old game away', () => go({ mode: 'table', fresh: true }));
+  else fresh?.addEventListener('click', () => go({ mode: 'table', fresh: true }));
   root.querySelector('[data-join]').addEventListener('submit', (e) => {
     e.preventDefault();
     const f = new FormData(e.target);

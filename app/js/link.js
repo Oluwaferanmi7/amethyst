@@ -31,7 +31,7 @@ export class Link {
     this.dialTimeout = null;
     this.failCount = 0;
     this.rtt = null;
-    setInterval(() => this._tick(), 2000);
+    this.tickTimer = setInterval(() => this._tick(), 2000);
     document.addEventListener('visibilitychange', () => document.visibilityState === 'visible' && this._revive());
     window.addEventListener('online', () => this._revive());
     this._build();
@@ -304,6 +304,28 @@ export class Link {
         this.target.send(msg);
       } catch {}
     }
+  }
+
+  // Screens come and go; the app keeps one Link and swaps these between screens.
+  setHandlers({ onMessage, onStatus, onControllerChange, onOpen, onCall } = {}) {
+    this.onMessage = onMessage || null;
+    this.onStatus = onStatus || null;
+    this.onControllerChange = onControllerChange || null;
+    this.onOpen = onOpen || null;
+    this.onCall = onCall || null;
+    queueMicrotask(() => this._status()); // after the screen has finished setting up
+  }
+
+  // Tear everything down (frees the code on the signalling server).
+  destroy() {
+    clearInterval(this.tickTimer);
+    clearTimeout(this.retryTimer);
+    clearTimeout(this.dialTimer);
+    this.targetCode = '';
+    this._dropTarget();
+    for (const code of [...this.controllers.keys()]) this._dropController(code);
+    if (this.peer && !this.peer.destroyed) this.peer.destroy();
+    this.peer = null;
   }
 
   // ------------------------------------------------------------- housekeeping

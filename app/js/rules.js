@@ -27,10 +27,14 @@ export const MAX_PLAYERS = 8;
 
 export function newGame() {
   return {
+    id: Math.random().toString(36).slice(2, 10), // phones use it to tell a new game from a stale state
     phase: 'lobby', players: [], props: {}, turn: 0, rolled: false, doubles: 0, dice: null,
-    pending: null, debt: null, decks: { chance: [], chest: [] }, card: null, log: [], seq: 0, winner: null,
+    pending: null, debt: null, auction: null, trade: null,
+    decks: { chance: [], chest: [] }, card: null, log: [], seq: 0, winner: null,
   };
 }
+//   auction   null | { space, bid, bidder, passed: [ids] }  runs when a buyer passes
+//   trade     null | { from, to, give: { cash, props }, get: { cash, props } }  one offer at a time
 
 const clone = (s) => JSON.parse(JSON.stringify(s));
 const fail = (msg) => { throw new Error(msg); };
@@ -117,6 +121,23 @@ export function legal(s, id) {
   if (!p || s.phase !== 'play' || p.bankrupt) return new Set();
   const out = new Set();
   const mine = current(s).id === id;
+
+  // An auction freezes everything else; every player still in it can bid or pass.
+  if (s.auction) {
+    if (!s.auction.passed.includes(id)) {
+      if (p.cash > s.auction.bid) out.add('bid');
+      if (s.auction.bidder !== id) out.add('auctionPass');
+    }
+    return out;
+  }
+  // Trades run alongside the turn: the receiver answers, the proposer can withdraw.
+  if (s.trade) {
+    if (s.trade.to === id) out.add('acceptTrade').add('rejectTrade');
+    if (s.trade.from === id) out.add('cancelTrade');
+  } else if (alive(s).length > 1) {
+    out.add('propose');
+  }
+
   if (s.debt && mine) {
     if (p.cash >= debtTotal(s)) out.add('payDebt');
     out.add('bankrupt');
@@ -163,9 +184,8 @@ export function reduce(prev, action, rng = Math.random) {
     const p = player(s, by) || fail('You are not in this game');
     if (s.phase !== 'play') fail('The game has not started');
     if (p.bankrupt) fail('You are out of the game');
-    if (current(s).id !== by) fail('Not your turn');
     const ok = legal(s, by);
-    if (!ok.has(type)) fail(`Can't ${type} right now`);
+    if (!ok.has(type)) fail(current(s).id !== by && !s.auction && !s.trade ? 'Not your turn' : `Can't ${type} right now`);
     playerAction(s, p, action, rng);
   }
   delete s._log;
@@ -229,8 +249,50 @@ function playerAction(s, p, a, rng) {
     case 'roll': return doRoll(s, p, rng, a.dice);
     case 'buy': return doBuy(s, p);
     case 'decline': {
-      s._log(`${p.name} passes on ${SPACES[s.pending.space].name}`);
+      const space = s.pending.space;
       s.pending = null;
+      s._log(`${p.name} passes on ${SPACES[space].name}. It goes to auction.`);
+      startAuction(s, space);
+      return;
+    }
+    case 'bid': {
+      const amount = Math.floor(Number(a.amount));
+      if (!(amount > s.auction.bid)) fail(`Bid more than ${money(s.auction.bid)}`);
+      if (amount > p.cash) fail('Not enough cash');
+      s.auction.bid = amount;
+      s.auction.bidder = p.id;
+      s._log(`${p.name} bids ${money(amount)} for ${SPACES[s.auction.space].name}`);
+      settleAuction(s);
+      return;
+    }
+    case 'auctionPass': {
+      s.auction.passed.push(p.id);
+      s._log(`${p.name} is out of the auction`);
+      settleAuction(s);
+      return;
+    }
+    case 'propose': {
+      const t = validateTrade(s, p.id, a);
+      s.trade = t;
+      s._log(`${p.name} offers ${player(s, t.to).name} a trade: ${tradeText(s, t)}`);
+      return;
+    }
+    case 'acceptTrade': {
+      const t = s.trade;
+      s.trade = null;
+      validateTrade(s, t.from, t); // still valid? (cash or deeds may have moved since)
+      applyTrade(s, t);
+      s._log(`${p.name} accepts the trade: ${tradeText(s, t)}`);
+      return;
+    }
+    case 'rejectTrade': {
+      s._log(`${p.name} turns the trade down`);
+      s.trade = null;
+      return;
+    }
+    case 'cancelTrade': {
+      s._log(`${p.name} withdraws the trade`);
+      s.trade = null;
       return;
     }
     case 'jailPay': {
@@ -448,6 +510,7 @@ function doBuy(s, p) {
 function endTurn(s) {
   if (s.pending) fail('Finish what you landed on first');
   if (s.debt) fail('Settle your debt first');
+  if (s.auction) fail('The auction is still on');
   const n = s.players.length;
   let i = s.turn;
   do i = (i + 1) % n; while (s.players[i].bankrupt);
@@ -506,6 +569,20 @@ function goBankrupt(s, p, to) {
   p.inJail = false;
   s.debt = null;
   s.pending = null;
+  if (s.trade && (s.trade.from === p.id || s.trade.to === p.id)) s.trade = null;
+  if (s.auction) {
+    if (s.auction.bidder === p.id) {
+      s.auction.bidder = null;
+      s.auction.bid = 0;
+    }
+    if (!s.auction.passed.includes(p.id)) s.auction.passed.push(p.id);
+    settleAuction(s);
+    if (s.auction && current(s).id === p.id) {
+      // Host removed the player whose turn it was mid-auction: call it off.
+      s._log(`Auction for ${SPACES[s.auction.space].name} is called off`);
+      s.auction = null;
+    }
+  }
 
   const left = alive(s);
   if (left.length === 1) {
@@ -606,4 +683,71 @@ function drawCard(s, p, deck) {
       s._log(`${p.name} arrives at ${sp.name}: roll again and pay 10× the throw`);
     }
   }
+}
+
+// ------------------------------------------------------------------ auctions
+
+function startAuction(s, space) {
+  s.auction = { space, bid: 0, bidder: null, passed: [] };
+  settleAuction(s); // a lone player simply doesn't get it
+}
+
+// Ends the auction once everyone but the high bidder has passed (or everyone has).
+function settleAuction(s) {
+  const a = s.auction;
+  if (!a) return;
+  const still = alive(s).filter((p) => !a.passed.includes(p.id));
+  const sp = SPACES[a.space];
+  if (a.bidder && still.length === 1 && still[0].id === a.bidder) {
+    const w = player(s, a.bidder);
+    w.cash -= a.bid;
+    s.props[a.space] = { owner: w.id, houses: 0, mortgaged: false };
+    s._log(`${w.name} wins ${sp.name} at auction for ${money(a.bid)}`);
+    s.auction = null;
+  } else if (still.length === 0 || (!a.bidder && still.length <= 1)) {
+    s._log(`Nobody wants ${sp.name}; it stays with the bank`);
+    s.auction = null;
+  }
+}
+
+// ------------------------------------------------------------------ trades
+
+const tradeProps = (list) => [...new Set((list || []).map(Number).filter((i) => Number.isInteger(i)))];
+
+// Checks an offer and returns it in canonical shape. Buildings must be sold first;
+// mortgaged deeds move as they are.
+function validateTrade(s, fromId, a) {
+  const from = player(s, fromId);
+  const to = player(s, a.to);
+  if (!to || to.bankrupt || to.id === fromId) fail('Pick another player');
+  const give = { cash: Math.max(0, Math.floor(Number(a.give?.cash) || 0)), props: tradeProps(a.give?.props) };
+  const get = { cash: Math.max(0, Math.floor(Number(a.get?.cash) || 0)), props: tradeProps(a.get?.props) };
+  if (give.cash > from.cash) fail(`${from.name} doesn't have ${money(give.cash)}`);
+  if (get.cash > to.cash) fail(`${to.name} doesn't have ${money(get.cash)}`);
+  for (const i of give.props) {
+    if (s.props[i]?.owner !== fromId) fail(`${from.name} doesn't own ${SPACES[i].name}`);
+    if (s.props[i].houses) fail(`Sell the buildings on ${SPACES[i].name} first`);
+  }
+  for (const i of get.props) {
+    if (s.props[i]?.owner !== to.id) fail(`${to.name} doesn't own ${SPACES[i].name}`);
+    if (s.props[i].houses) fail(`${SPACES[i].name} has buildings on it`);
+  }
+  if (!give.cash && !get.cash && !give.props.length && !get.props.length) fail('Offer something');
+  return { from: fromId, to: to.id, give, get };
+}
+
+function applyTrade(s, t) {
+  const from = player(s, t.from);
+  const to = player(s, t.to);
+  from.cash -= t.give.cash;
+  to.cash += t.give.cash;
+  to.cash -= t.get.cash;
+  from.cash += t.get.cash;
+  for (const i of t.give.props) s.props[i].owner = to.id;
+  for (const i of t.get.props) s.props[i].owner = from.id;
+}
+
+export function tradeText(s, t) {
+  const side = (x) => [...x.props.map((i) => SPACES[i].name), x.cash ? money(x.cash) : ''].filter(Boolean).join(' + ') || 'nothing';
+  return `${side(t.give)} for ${side(t.get)}`;
 }

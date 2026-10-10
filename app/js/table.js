@@ -1,35 +1,35 @@
 // The table phone: owns the game state, runs the rules, shows the board, relays state
-// to every player phone. Optionally also seats the host as a player ("I'm playing too").
+// to every player phone. The host can also take a seat; their hand then sits under the board.
 
-import { Link } from './link.js';
 import { newGame, reduce, player, current } from './rules.js';
 import { TOKENS } from './board.js';
 import { renderHand } from './hand.js';
-import { esc, money, boardHtml, playersHtml, logHtml, spaceHtml, toast } from './render.js';
+import { esc, boardHtml, playersHtml, logHtml, spaceModal, toast, confirmTap } from './render.js';
 import { load, save, remove } from './store.js';
+import { sound } from './sound.js';
 
 const KEY = 'am.table.state';
+const EMPTY_TRADE = () => ({ open: false, to: null, give: { cash: 0, props: [] }, get: { cash: 0, props: [] } });
 
-export function startTable(root, { code, onHome }) {
-  let s = load(KEY, null) || newGame();
+export function startTable(root, { code, link, fresh, onHome }) {
+  let s = (!fresh && load(KEY, null)) || newGame();
+  if (fresh) remove(KEY);
   let hostSeat = load('am.table.seat', null); // { name, token } when the host plays too
-  let ui = { tab: 'board', sheet: false };
-  const names = new Map(); // code -> name said in hello, for the lobby
+  let ui = { menu: false, space: null, rolling: false, trade: EMPTY_TRADE(), small: load('am.small', false) };
+  const names = new Map(); // code -> name said in hello
+  let rollTimer = null;
+  const sendLocal = (action) => dispatch(action, code);
 
-  let link = null; // assigned below; the Link constructor already calls onStatus
-  link = new Link({
-    code,
+  link.disconnect(); // a table never dials out
+  link.setHandlers({
     onMessage: (msg, from, who) => {
       if (from !== 'controller') return;
       if (msg?.t === 'hello') {
         names.set(who, msg.name);
-        if (s.phase === 'lobby' && !player(s, who)) {
-          dispatch({ type: 'addPlayer', by: 'host', id: who, name: msg.name, token: msg.token }, who);
-        } else if (s.phase === 'lobby' && msg.name && player(s, who).name !== msg.name) {
-          dispatch({ type: 'rename', by: 'host', id: who, name: msg.name }, who);
-        } else {
-          sendState(who);
-        }
+        const seated = player(s, who);
+        if (s.phase === 'lobby' && !seated) dispatch({ type: 'addPlayer', by: 'host', id: who, name: msg.name, token: msg.token }, who);
+        else if (s.phase === 'lobby' && msg.name && seated.name !== msg.name) dispatch({ type: 'rename', by: 'host', id: who, name: msg.name }, who);
+        else sendState(who);
       } else if (msg?.t === 'act' && msg.action) {
         dispatch({ ...msg.action, by: who }, who);
       }
@@ -46,55 +46,59 @@ export function startTable(root, { code, onHome }) {
   }
   function dispatch(action, who) {
     try {
+      const prev = s;
       s = reduce(s, action);
       save(KEY, s);
       broadcast();
+      sound.cue(prev, s, code);
+      if (JSON.stringify(prev.dice) !== JSON.stringify(s.dice)) {
+        ui.rolling = true;
+        clearTimeout(rollTimer);
+        rollTimer = setTimeout(() => { ui.rolling = false; render(); }, 700);
+      }
       render();
     } catch (e) {
       if (who && who !== code) link.sendTo(who, { t: 'err', msg: e.message });
       else toast(e.message);
     }
   }
-  const sendLocal = (action) => dispatch(action, code);
 
   function render() {
-    if (!link) return;
     const online = new Set(link.controllerCodes);
     if (s.phase === 'lobby') return renderLobby(online);
     const hostPlaying = !!player(s, code);
     const cur = current(s);
     root.innerHTML = `
-      <div class="table">
+      <div class="table screen">
         <header class="th">
           <button class="lnk" data-home>‹</button>
           <div class="codepill">Table <b>${code}</b> · ${online.size} phone${online.size === 1 ? '' : 's'}</div>
-          <button class="lnk" data-menu>⋯</button>
+          <span><button class="lnk" data-small title="Board size">${ui.small ? '⤢' : '⤡'}</button><button class="lnk" data-mute>${sound.muted ? '🔇' : '🔊'}</button><button class="lnk" data-menu>⋯</button></span>
         </header>
-        ${s.phase === 'over' ? `<div class="winner">🏆 ${esc(player(s, s.winner).name)} wins!</div>` : ''}
-        ${boardHtml(s, { highlight: cur?.pos })}
-        ${playersHtml(s, hostPlaying ? code : null)}
-        ${logHtml(s, 8)}
-        ${hostPlaying ? `<button class="pri sheetbtn" data-sheet>${cur?.id === code && s.phase === 'play' ? '🎲 Your turn — open your hand' : 'My hand'} · ${money(player(s, code).cash)}</button>` : ''}
+        <div class="boardwrap">${boardHtml(s, { highlight: cur?.pos, rolling: ui.rolling, meId: hostPlaying ? code : null, small: ui.small })}</div>
+        <div class="under">
+          ${hostPlaying ? '<div class="handroot"></div>' : `${playersHtml(s)}<details class="logbox" open><summary>Log</summary>${logHtml(s, 30)}</details>`}
+        </div>
       </div>
-      ${hostPlaying && ui.sheet ? `<div class="sheet"><div class="sheetbar"><button class="lnk" data-sheet>▾ Back to the board</button></div><div class="sheetbody"></div></div>` : ''}
       ${ui.menu ? menuHtml(online) : ''}
-      ${ui.space != null ? `<div class="modal" data-close><div class="modalbox">${spaceHtml(s, ui.space)}<button data-close>Close</button></div></div>` : ''}`;
-    if (hostPlaying && ui.sheet) {
-      renderHand(root.querySelector('.sheetbody'), s, code, sendLocal, {
-        tab: ui.tab === 'board' ? 'hand' : ui.tab,
-        setTab: (t) => { ui.tab = t; render(); },
+      ${ui.space != null ? spaceModal(s, ui.space) : ''}`;
+    if (hostPlaying) {
+      renderHand(root.querySelector('.handroot'), s, code, sendLocal, {
         showSpace: (i) => { ui.space = i; render(); },
+        trade: ui.trade,
+        setTrade: (t) => { ui.trade = t; render(); },
+        bid: ui.bid,
       });
     }
-    wire(online);
+    wire();
   }
 
   function menuHtml(online) {
     const others = s.players.filter((p) => !p.bankrupt && p.id !== code);
     return `<div class="modal" data-close><div class="modalbox menu">
-      <h3>Table</h3>
+      <h3>Table ${code}</h3>
       ${others.map((p) => `<button data-forfeit="${p.id}">Remove ${esc(p.name)} (${online.has(p.id) ? 'online' : 'offline'})</button>`).join('')}
-      <button class="danger" data-newgame>New game</button>
+      <button class="danger" data-newgame>New game (same players)</button>
       <button data-close>Close</button>
     </div></div>`;
   }
@@ -102,8 +106,8 @@ export function startTable(root, { code, onHome }) {
   function renderLobby(online) {
     const hostIn = !!player(s, code);
     root.innerHTML = `
-      <div class="table lobby">
-        <header class="th"><button class="lnk" data-home>‹ Home</button><span></span><span></span></header>
+      <div class="table lobby screen">
+        <header class="th"><button class="lnk" data-home>‹ Home</button><span></span><button class="lnk" data-mute>${sound.muted ? '🔇' : '🔊'}</button></header>
         <div class="joincode"><small>Friends join with the code</small><b>${code}</b><small>${link.host === 'ready' ? 'Ready for players' : esc(link.hostDetail || 'Connecting…')}</small></div>
         <div class="seats">
           ${s.players.map((p) => `<div class="seat" style="--c:${p.color}"><span class="tok">${p.token}</span><span class="nm">${esc(p.name)}</span><span class="st">${p.id === code ? 'this phone' : online.has(p.id) ? 'online' : 'offline'}</span><button class="lnk" data-remove="${p.id}">✕</button></div>`).join('')}
@@ -116,12 +120,14 @@ export function startTable(root, { code, onHome }) {
         </form>`}
         <button class="pri xl" data-start ${s.players.length >= 2 ? '' : 'disabled'}>Start game${s.players.length < 2 ? ' (need 2+)' : ''}</button>
       </div>`;
-    wire(online);
+    wire();
   }
 
   function wire() {
-    root.querySelector('[data-home]')?.addEventListener('click', () => { link.disconnect(); onHome(); });
+    root.querySelector('[data-home]')?.addEventListener('click', () => onHome());
     root.querySelector('[data-start]')?.addEventListener('click', () => dispatch({ type: 'start', by: 'host' }));
+    root.querySelector('[data-mute]')?.addEventListener('click', () => { sound.toggle(); render(); });
+    root.querySelector('[data-small]')?.addEventListener('click', () => { ui.small = !ui.small; save('am.small', ui.small); render(); });
     root.querySelectorAll('[data-remove]').forEach((b) => b.addEventListener('click', () => dispatch({ type: 'removePlayer', by: 'host', id: b.dataset.remove })));
     root.querySelector('[data-hostseat]')?.addEventListener('submit', (e) => {
       e.preventDefault();
@@ -130,28 +136,42 @@ export function startTable(root, { code, onHome }) {
       save('am.table.seat', hostSeat);
       dispatch({ type: 'addPlayer', by: 'host', id: code, name: hostSeat.name, token: hostSeat.token });
     });
-    root.querySelectorAll('[data-sheet]').forEach((b) => b.addEventListener('click', () => { ui.sheet = !ui.sheet; render(); }));
     root.querySelector('[data-menu]')?.addEventListener('click', () => { ui.menu = true; render(); });
     root.querySelectorAll('[data-close]').forEach((b) =>
       b.addEventListener('click', (e) => { if (e.target === b) { ui.menu = false; ui.space = null; render(); } }),
     );
     root.querySelectorAll('[data-forfeit]').forEach((b) =>
-      b.addEventListener('click', () => { if (confirm(`Remove ${player(s, b.dataset.forfeit).name} from the game? Their deeds go back to the bank.`)) { ui.menu = false; dispatch({ type: 'forfeit', by: 'host', id: b.dataset.forfeit }); } }),
+      confirmTap(b, 'Tap again to remove them (deeds go to the bank)', () => {
+        ui.menu = false;
+        dispatch({ type: 'forfeit', by: 'host', id: b.dataset.forfeit });
+      }),
     );
-    root.querySelector('[data-newgame]')?.addEventListener('click', () => {
-      if (!confirm('Start a new game? The current one is lost.')) return;
-      ui = { tab: 'board', sheet: false };
-      s = newGame();
-      remove(KEY);
-      // Re-seat everyone who is still connected.
-      if (hostSeat) dispatch({ type: 'addPlayer', by: 'host', id: code, name: hostSeat.name, token: hostSeat.token });
-      for (const who of link.controllerCodes) dispatch({ type: 'addPlayer', by: 'host', id: who, name: names.get(who) || 'Player' }, who);
-      broadcast();
-      render();
-    });
+    const ng = root.querySelector('[data-newgame]');
+    if (ng) confirmTap(ng, 'Tap again: the current game is lost', newGameSamePlayers);
     root.querySelectorAll('.table .cell[data-space]').forEach((el) => el.addEventListener('click', () => { ui.space = Number(el.dataset.space); render(); }));
   }
 
+  // Back to the lobby with everyone who was seated (connected phones get a fresh hello anyway).
+  function newGameSamePlayers() {
+    const seated = s.players.map((p) => ({ id: p.id, name: p.name, token: p.token }));
+    ui = { ...ui, menu: false, space: null, trade: EMPTY_TRADE() };
+    s = newGame();
+    remove(KEY);
+    for (const p of seated) {
+      try {
+        s = reduce(s, { type: 'addPlayer', by: 'host', id: p.id, name: p.name, token: p.token });
+      } catch {}
+    }
+    save(KEY, s);
+    broadcast();
+    render();
+  }
+
   render();
-  return { stop: () => link.disconnect() };
+  return {
+    stop: () => {
+      clearTimeout(rollTimer);
+      link.setHandlers({});
+    },
+  };
 }

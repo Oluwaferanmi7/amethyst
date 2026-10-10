@@ -14,6 +14,12 @@ function table(names = ['Ann', 'Bob']) {
 }
 const roll = (s, dice, by = current(s).id) => reduce(s, { type: 'roll', by, dice }, noRng);
 const act = (s, type, extra = {}) => reduce(s, { type, by: current(s).id, ...extra }, noRng);
+// Pass on a purchase and let everyone sit out the auction.
+const noBuy = (s) => {
+  s = act(s, 'decline');
+  for (const p of s.players) if (s.auction && !p.bankrupt && !s.auction.passed.includes(p.id)) s = reduce(s, { type: 'auctionPass', by: p.id }, noRng);
+  return s;
+};
 const give = (s, id, space, houses = 0, mortgaged = false) => {
   s.props[space] = { owner: id, houses, mortgaged };
   return s;
@@ -34,8 +40,8 @@ test('lobby: players join, game needs two to start', () => {
 
 test('roll, land on a street, buy it; then end turn', () => {
   let s = table();
-  assert.deepEqual([...legal(s, 'p1')], ['roll']);
-  assert.equal(legal(s, 'p2').size, 0);
+  assert.deepEqual([...legal(s, 'p1')].filter((a) => a !== 'propose'), ['roll']);
+  assert.deepEqual([...legal(s, 'p2')], ['propose'], 'not their turn, but they may offer a trade');
   s = roll(s, [1, 2]); // Harbor Lane (3), $60
   assert.equal(current(s).pos, 3);
   assert.deepEqual(s.pending, { type: 'buy', space: 3 });
@@ -48,10 +54,13 @@ test('roll, land on a street, buy it; then end turn', () => {
   assert.equal(current(s).id, 'p2');
 });
 
-test('declining leaves the property for sale', () => {
+test('declining leaves the property for sale once nobody bids', () => {
   let s = table();
   s = roll(s, [1, 2]);
   s = act(s, 'decline');
+  assert.equal(s.auction.space, 3);
+  s = reduce(s, { type: 'auctionPass', by: 'p1' }, noRng);
+  assert.equal(s.auction, null, 'one player left with no bid: over');
   assert.equal(s.props[3], undefined);
   assert.equal(s.pending, null);
 });
@@ -151,12 +160,12 @@ test('jail: pay to leave, or roll doubles, or third try pays the fine', () => {
   assert.ok(legal(b, 'p1').has('endTurn'));
   b = act(b, 'endTurn');
   b = roll(b, [1, 2], 'p2');
-  b = act(b, 'decline');
+  b = noBuy(b);
   b = act(b, 'endTurn');
   b = roll(b, [1, 2]);
   b = act(b, 'endTurn');
   b = roll(b, [1, 2], 'p2'); // Maple Street, for sale
-  b = act(b, 'decline');
+  b = noBuy(b);
   b = act(b, 'endTurn');
   b = roll(b, [1, 2]); // third try
   assert.equal(player(b, 'p1').inJail, false);
@@ -234,7 +243,7 @@ test('chance cards: advance to GO, back three, pay each player, nearest rail dou
   give(s, 'p2', 12);
   s = roll(s, [1, 2]);
   assert.deepEqual(s.pending, { type: 'utilityRoll', space: 12 });
-  assert.deepEqual([...legal(s, 'p1')], ['roll']);
+  assert.deepEqual([...legal(s, 'p1')].filter((a) => a !== 'propose'), ['roll']);
   s = roll(s, [4, 5]);
   assert.equal(player(s, 'p1').cash, START_CASH - 90);
   assert.equal(s.pending, null);
@@ -357,11 +366,11 @@ test('bankrupt to the bank clears the deeds; the host can forfeit a player', () 
   assert.equal(s.props[1], undefined);
   assert.equal(current(s).id, 'p2', 'turn moved on');
   s = roll(s, [1, 2], 'p2');
-  s = act(s, 'decline');
+  s = noBuy(s);
   s = act(s, 'endTurn');
   assert.equal(current(s).id, 'p3');
   s = roll(s, [1, 2], 'p3');
-  s = act(s, 'decline');
+  s = noBuy(s);
   s = act(s, 'endTurn');
   assert.equal(current(s).id, 'p2', 'skips the bankrupt player');
 });
@@ -373,4 +382,77 @@ test('illegal actions are refused with a reason', () => {
   assert.throws(() => reduce(s, { type: 'roll', by: 'ghost' }), /not in this game/);
   s = roll(s, [1, 2]);
   assert.throws(() => reduce(s, { type: 'roll', by: 'p1' }), /Can't roll/);
+});
+
+test('auction: highest bidder wins when everyone else passes; the decliner may bid too', () => {
+  let s = table(['Ann', 'Bob', 'Cy']);
+  s = roll(s, [1, 2]); // Harbor Lane
+  s = act(s, 'decline');
+  assert.ok(legal(s, 'p2').has('bid') && legal(s, 'p3').has('bid') && legal(s, 'p1').has('bid'));
+  assert.ok(!legal(s, 'p1').has('endTurn'));
+  s = reduce(s, { type: 'bid', by: 'p2', amount: 30 }, noRng);
+  assert.throws(() => reduce(s, { type: 'bid', by: 'p3', amount: 30 }, noRng), /more than/);
+  assert.ok(!legal(s, 'p2').has('auctionPass'), 'the high bidder cannot pass');
+  s = reduce(s, { type: 'bid', by: 'p1', amount: 45 }, noRng);
+  s = reduce(s, { type: 'auctionPass', by: 'p3' }, noRng);
+  s = reduce(s, { type: 'auctionPass', by: 'p2' }, noRng);
+  assert.equal(s.auction, null);
+  assert.equal(s.props[3].owner, 'p1');
+  assert.equal(player(s, 'p1').cash, START_CASH - 45);
+  assert.ok(legal(s, 'p1').has('endTurn'));
+});
+
+test('auction: a player who cannot afford the price can still decline into an auction', () => {
+  let s = table();
+  s.players[0].cash = 20;
+  s = roll(s, [1, 2]);
+  assert.ok(!legal(s, 'p1').has('buy') && legal(s, 'p1').has('decline'));
+  s = act(s, 'decline');
+  assert.ok(legal(s, 'p1').has('bid'));
+  assert.throws(() => reduce(s, { type: 'bid', by: 'p1', amount: 25 }, noRng), /cash/);
+});
+
+test('trade: propose, accept moves deeds and cash both ways; reject clears it', () => {
+  let s = table();
+  give(s, 'p1', 1);
+  give(s, 'p2', 3);
+  give(s, 'p2', 5);
+  const offer = { type: 'propose', by: 'p2', to: 'p1', give: { cash: 100, props: [3] }, get: { cash: 0, props: [1] } };
+  s = reduce(s, offer, noRng); // Bob proposes on Ann's turn: allowed
+  assert.equal(s.trade.from, 'p2');
+  assert.deepEqual([...legal(s, 'p1')].filter((a) => a.includes('Trade')), ['acceptTrade', 'rejectTrade']);
+  assert.ok(legal(s, 'p2').has('cancelTrade'));
+  assert.throws(() => reduce(s, { ...offer, by: 'p1', to: 'p2' }, noRng), /propose/);
+  let r = reduce(s, { type: 'rejectTrade', by: 'p1' }, noRng);
+  assert.equal(r.trade, null);
+  assert.equal(r.props[1].owner, 'p1');
+  s = reduce(s, { type: 'acceptTrade', by: 'p1' }, noRng);
+  assert.equal(s.trade, null);
+  assert.equal(s.props[1].owner, 'p2');
+  assert.equal(s.props[3].owner, 'p1');
+  assert.equal(player(s, 'p1').cash, START_CASH + 100);
+  assert.equal(player(s, 'p2').cash, START_CASH - 100);
+});
+
+test('trade: refuses buildings, deeds you do not own, cash you do not have, and empty offers', () => {
+  let s = table();
+  give(s, 'p1', 1, 2);
+  give(s, 'p1', 3, 2);
+  give(s, 'p2', 6);
+  const t = (extra) => reduce(s, { type: 'propose', by: 'p1', to: 'p2', give: { cash: 0, props: [] }, get: { cash: 0, props: [] }, ...extra }, noRng);
+  assert.throws(() => t({ give: { props: [1] } }), /buildings/);
+  assert.throws(() => t({ give: { props: [6] } }), /doesn't own/);
+  assert.throws(() => t({ give: { cash: 5000 } }), /doesn't have/);
+  assert.throws(() => t({}), /Offer something/);
+  assert.throws(() => t({ to: 'p1', give: { cash: 10 } }), /another player/);
+  const ok = t({ get: { props: [6] }, give: { cash: 120 } });
+  assert.equal(ok.trade.get.props[0], 6);
+});
+
+test('trade: accepting re-checks the offer after things changed', () => {
+  let s = table();
+  give(s, 'p1', 1);
+  s = reduce(s, { type: 'propose', by: 'p1', to: 'p2', give: { cash: 0, props: [1] }, get: { cash: 300, props: [] } }, noRng);
+  s.players[1].cash = 100; // Bob spent his money meanwhile
+  assert.throws(() => reduce(s, { type: 'acceptTrade', by: 'p2' }, noRng), /doesn't have/);
 });

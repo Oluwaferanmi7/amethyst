@@ -1,4 +1,4 @@
-// Shared views: the board, dice, a space's details. Used by the table and the hand.
+// Shared views: the board, dice, a space's details, the players strip, the log.
 
 import { SPACES, GROUPS, RAIL_RENT } from './board.js';
 import { rentAt, player, unmortgageCost } from './rules.js';
@@ -16,16 +16,17 @@ export function cellOf(i) {
 }
 
 const ICON = { go: 'GO', chest: '▣', chance: '?', tax: '$', rail: '🚂', utility: '⚡', jail: '▦', parking: 'P', gotojail: '👮' };
-
 const DICE = ['', '⚀', '⚁', '⚂', '⚃', '⚄', '⚅'];
-export const diceHtml = (dice) => (dice ? `<span class="dice">${DICE[dice[0]]}${DICE[dice[1]]}</span>` : '');
+export const diceHtml = (dice, rolling) => (dice ? `<span class="dice ${rolling ? 'rolling' : ''}">${DICE[dice[0]]}${DICE[dice[1]]}</span>` : '');
 
+// opts: highlight (space index), rolling (animate dice), meId (for "you" cues)
 export function boardHtml(s, opts = {}) {
   const cells = SPACES.map((sp, i) => {
     const { col, row } = cellOf(i);
     const pr = s.props[i];
     const cls = ['cell', sp.type, pr?.mortgaged ? 'mortgaged' : ''];
     if (opts.highlight === i) cls.push('hl');
+    if (s.auction?.space === i) cls.push('auction');
     const owner = pr ? player(s, pr.owner) : null;
     const style = `grid-column:${col};grid-row:${row};${owner ? `--owner:${owner.color}` : ''}`;
     let top = '';
@@ -41,13 +42,18 @@ export function boardHtml(s, opts = {}) {
     return `<div class="${cls.join(' ')}" style="${style}" data-space="${i}" ${owner ? 'data-owned' : ''}>${top}${mid}${toks}</div>`;
   });
   const cur = s.players[s.turn];
+  let notice = '';
+  if (s.phase === 'lobby') notice = `<div class="notice">Waiting to start</div>`;
+  else if (s.phase === 'over') notice = `<div class="notice">🏆 ${esc(player(s, s.winner).name)} wins</div>`;
+  else if (s.auction) notice = `<div class="notice">🔨 Auction: ${esc(SPACES[s.auction.space].name)}<br>${s.auction.bidder ? `${money(s.auction.bid)} by ${esc(player(s, s.auction.bidder).name)}` : 'no bids yet'}</div>`;
+  else if (s.card) notice = `<div class="cardtxt"><b>${s.card.deck === 'chance' ? 'Chance' : 'Community Chest'}</b><br>${esc(s.card.text)}</div>`;
   const centre = `<div class="centre">
     <div class="brand">Amethyst</div>
-    ${s.phase === 'play' && cur ? `<div class="whose" style="--c:${cur.color}">${cur.token} ${esc(cur.name)}</div>` : ''}
-    ${diceHtml(s.dice)}
-    ${s.card ? `<div class="cardtxt"><b>${s.card.deck === 'chance' ? 'Chance' : 'Community Chest'}</b><br>${esc(s.card.text)}</div>` : ''}
+    ${s.phase === 'play' && cur ? `<div class="whose" style="--c:${cur.color}">${cur.token} ${cur.id === opts.meId ? 'Your turn' : esc(cur.name)}${cur.inJail ? ' · in Jail' : ''}</div>` : ''}
+    ${diceHtml(s.dice, opts.rolling)}
+    ${notice}
   </div>`;
-  return `<div class="board">${cells.join('')}${centre}</div>`;
+  return `<div class="board ${opts.small ? 'small' : ''}">${cells.join('')}${centre}</div>`;
 }
 
 // Everything worth knowing about one space, as a small card.
@@ -73,7 +79,7 @@ export function spaceHtml(s, i) {
     rows.push(['Mortgage', money(sp.price / 2)]);
   } else if (sp.type === 'tax') rows.push(['Pay', money(sp.amount)]);
   if (owner) {
-    let status = pr.mortgaged ? 'mortgaged' : pr.houses === 5 ? 'hotel' : pr.houses ? `${pr.houses} house${pr.houses > 1 ? 's' : ''}` : '';
+    const status = pr.mortgaged ? 'mortgaged' : pr.houses === 5 ? 'hotel' : pr.houses ? `${pr.houses} house${pr.houses > 1 ? 's' : ''}` : '';
     rows.push(['Owner', `<span style="color:${owner.color}">${owner.token} ${esc(owner.name)}</span>${status ? ' · ' + status : ''}`]);
     if (!pr.mortgaged) rows.push(['Rent now', money(rentAt(s, i, s.dice))]);
   }
@@ -86,7 +92,7 @@ export function playersHtml(s, meId) {
     .map((p, i) => {
       const cls = ['pl', i === s.turn && s.phase === 'play' ? 'now' : '', p.bankrupt ? 'out' : '', p.id === meId ? 'me' : ''];
       const owned = Object.values(s.props).filter((x) => x.owner === p.id).length;
-      return `<div class="${cls.join(' ')}" style="--c:${p.color}"><span class="tok">${p.token}</span><span class="nm">${esc(p.name)}${p.inJail ? ' 🔒' : ''}</span><span class="cash">${p.bankrupt ? 'out' : money(p.cash)}</span><span class="cnt">${owned} deed${owned === 1 ? '' : 's'}</span></div>`;
+      return `<div class="${cls.join(' ')}" style="--c:${p.color}"><span class="tok">${p.token}</span><span class="nm">${esc(p.name)}${p.id === meId ? ' (you)' : ''}${p.inJail ? ' 🔒' : ''}</span><span class="cash">${p.bankrupt ? 'out' : money(p.cash)}</span><span class="cnt">${owned} deed${owned === 1 ? '' : 's'}</span></div>`;
     })
     .join('')}</div>`;
 }
@@ -106,4 +112,31 @@ export function toast(text, ms = 2200) {
   el.classList.add('on');
   clearTimeout(el._t);
   el._t = setTimeout(() => el.classList.remove('on'), ms);
+}
+
+// A bottom sheet with a deed card; `root` is the screen's root.
+export function spaceModal(s, i) {
+  return `<div class="modal" data-close><div class="modalbox">${spaceHtml(s, i)}<button data-close>Close</button></div></div>`;
+}
+
+// Two-tap confirmation instead of a native confirm() (blocks the page, ugly in a PWA).
+// First tap arms the button for 3 s and relabels it; a second tap runs the action.
+export function confirmTap(button, label, action) {
+  button.addEventListener('click', () => {
+    if (button.dataset.armed) {
+      delete button.dataset.armed;
+      action();
+      return;
+    }
+    const was = button.innerHTML;
+    button.dataset.armed = '1';
+    button.classList.add('armed');
+    button.innerHTML = label;
+    setTimeout(() => {
+      if (!button.isConnected) return;
+      delete button.dataset.armed;
+      button.classList.remove('armed');
+      button.innerHTML = was;
+    }, 3000);
+  });
 }
