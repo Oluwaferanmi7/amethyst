@@ -370,3 +370,7 @@ body {
 @media (orientation: landscape) and (max-height: 620px) {
   .boardwrap { padding-right: 8px; }
 }
+
+.diceover { transition: opacity 0.35s ease; }
+.diceover.hidden { opacity: 0; }
+.board.zoomed { --tilt: 2deg; }

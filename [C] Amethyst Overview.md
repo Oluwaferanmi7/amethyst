@@ -24,8 +24,10 @@ A property-trading board game (Monopoly-styled, own street names) for phones. On
 
 - **2026-10-11 night, his verdict on v6 was "it's bad lol":** dice jumping to where the last throw landed read as teleporting. Reworked per his spec: **dice are an overlay fixed in the middle of the board area** (outside the camera transform, always centred, come back every turn; **tap the dice to roll**, they pulse + "tap to roll" pill on your roll). **Camera = whoever's turn it is**: rests at 1.45× on the current player's piece (also when the turn simply passes), 1.6× following them while they move, settles back to 1.45× on them. ⤡ now toggles "whole board" (camera off) instead of shrinking the board. Sampled in the browser every 300 ms during a roll: rest on Ann → ROLLING → 1.6× following 14→24 cell by cell → settle on her at 24. The whole-board overview is the ⤡ toggle now; nobody has asked for it to come back automatically.
 
+- **2026-10-11, his screenshots of v7 ("the board can't look like this the entire game"):** resting at 1.45× on the current player meant the board was always a zoomed corner, and because the view centred on that player the centred dice looked like they followed them. Reworked to his exact order: **at rest the whole board shows** (zoom 1, dice in the centre) → roll: dice tumble on the full board → camera zooms (0.5 s) onto the piece about to move, dice fade out → glides with each hop → zooms back out (0.7 s) → dice fade back in at the centre. A turn passing without a move leaves the whole board as is. Sampled every 250 ms in the browser: rest/shown → ROLLING at rest → 1.6× following with dice hidden → rest/shown.
+
 ## Next
-1. Feranmi plays a real game with the new build (sideways!). Open question: should the camera pull back to the whole board for a beat when the turn passes, so you see where everyone is?
+1. Feranmi plays a real game with the new build (sideways!).
 2. Ideas not started: token movement sound per step is a plain tick (could be nicer), bank housing limit (32/12), trade history, a timer for slow bidders, locations/theme for street names (he mentioned it, then parked it).
 
 ## Dev notes

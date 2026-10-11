@@ -75,7 +75,7 @@ export function startTable(root, { code, link, fresh, onHome }) {
     const oldBoard = root.querySelector('.board');
     root.innerHTML = `
       <div class="table screen">
-        <div class="boardwrap">${boardHtml(v, { highlight: cur?.pos, meId: hostPlaying ? code : null, mine, ...opts, ...(ui.small ? { focus: null } : {}) })}${diceOverlayHtml(opts.dice || v.dice, opts.rolling, mine)}</div>
+        <div class="boardwrap">${boardHtml(v, { highlight: cur?.pos, meId: hostPlaying ? code : null, mine, ...opts, ...(ui.small ? { focus: null } : {}) })}${diceOverlayHtml(opts.dice || v.dice, opts.rolling, mine, opts.hideDice)}</div>
         <div class="side">
           <header class="th">
             <button class="lnk" data-home>‹</button>

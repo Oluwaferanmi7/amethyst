@@ -247,7 +247,7 @@ export function keepBoardNode(root, old) {
 
 // The dice, drawn over the board area (not inside the camera's transform), always centred.
 // `mine` = tapping them rolls.
-export function diceOverlayHtml(dice, rolling, mine) {
+export function diceOverlayHtml(dice, rolling, mine, hidden) {
   const d = dice || [1, 1];
-  return `<div class="diceover ${mine ? 'tapdice' : ''} ${dice ? '' : 'idle'}" ${mine ? 'data-roll title="Tap to roll"' : ''}>${diceHtml(d, rolling)}${mine ? '<span class="dicehint">tap to roll</span>' : ''}</div>`;
+  return `<div class="diceover ${mine ? 'tapdice' : ''} ${dice ? '' : 'idle'} ${hidden ? 'hidden' : ''}" ${mine ? 'data-roll title="Tap to roll"' : ''}>${diceHtml(d, rolling)}${mine ? '<span class="dicehint">tap to roll</span>' : ''}</div>`;
 }

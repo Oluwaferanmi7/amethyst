@@ -55,7 +55,7 @@ export function startPlayer(root, { code, link, tableCode, name, token, onHome }
     const oldBoard = root.querySelector('.board');
     root.innerHTML = `
       <div class="player screen">
-        ${v ? `<div class="boardwrap">${boardHtml(v, { highlight: cur?.pos, meId: code, mine, ...opts, ...(ui.small ? { focus: null } : {}) })}${diceOverlayHtml(opts.dice || v.dice, opts.rolling, mine)}</div>` : ''}
+        ${v ? `<div class="boardwrap">${boardHtml(v, { highlight: cur?.pos, meId: code, mine, ...opts, ...(ui.small ? { focus: null } : {}) })}${diceOverlayHtml(opts.dice || v.dice, opts.rolling, mine, opts.hideDice)}</div>` : ''}
         <div class="side">
           <header class="th">
             <button class="lnk" data-home>‹ Leave</button>
