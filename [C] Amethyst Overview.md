@@ -15,6 +15,8 @@ A property-trading board game (Monopoly-styled, own street names) for phones. On
 - Dev server moved to **port 8766** (Topaz holds 8765).
 - Verified 2026-10-11 in two tabs: dice tumble → hop → Chance card flip on both phones → "Go" → backwards hop to Income Tax → banner on both phones → Pay → −$200 floats → Bob rolls by tapping his piece → deed card + Buy/Pass at phone size.
 
+- **2026-10-11 fixes from his first look:** dice showed 1:1 during the spin then snapped to the throw (the spin keyframes ended at zero rotation = face 1) → each face sets --fx/--fy and the spin ends on that orientation (verified: spinning cube's final transform === static cube's). Jail: siren sound (4 sweeps) + red/blue flash over the board + "🚔 X goes to Jail!" notice, ~1.8 s, before the token appears in the cell.
+
 ## Next
 1. Feranmi plays a real game with the new build.
 2. Ideas not started: token movement sound per step is a plain tick (could be nicer), bank housing limit (32/12), trade history, a timer for slow bidders, locations/theme for street names (he mentioned it, then parked it).

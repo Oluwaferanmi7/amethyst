@@ -63,10 +63,12 @@ export function createPresenter({ render, onStep }) {
     }
     for (const m of moves) {
       if (m.jump) {
-        override[m.id] = m.to;
-        render(prev, { dice: next.dice, override, hop: m.id, animating: true });
         onStep?.('jail');
-        await wait(500);
+        render(prev, { dice: next.dice, override, siren: m.id, animating: true });
+        await wait(900);
+        override[m.id] = m.to;
+        render(prev, { dice: next.dice, override, hop: m.id, siren: m.id, animating: true });
+        await wait(900);
         continue;
       }
       const back = (m.from - m.to + 40) % 40;

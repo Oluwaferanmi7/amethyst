@@ -100,6 +100,23 @@ function play(name) {
         tone(988, t, 0.12, 'sine', 0.1);
         tone(988, t + 0.18, 0.12, 'sine', 0.1);
         break;
+      case 'siren': {
+        for (let i = 0; i < 4; i++) {
+          const o = ctx.createOscillator();
+          const g = ctx.createGain();
+          o.type = 'square';
+          o.frequency.setValueAtTime(620, t + i * 0.45);
+          o.frequency.linearRampToValueAtTime(930, t + i * 0.45 + 0.22);
+          o.frequency.linearRampToValueAtTime(620, t + i * 0.45 + 0.45);
+          g.gain.setValueAtTime(0.05, t + i * 0.45);
+          g.gain.setValueAtTime(0.05, t + i * 0.45 + 0.44);
+          g.gain.linearRampToValueAtTime(0.0001, t + i * 0.45 + 0.45);
+          o.connect(g).connect(ctx.destination);
+          o.start(t + i * 0.45);
+          o.stop(t + i * 0.45 + 0.46);
+        }
+        break;
+      }
       case 'win':
         [523, 659, 784, 1047].forEach((f, i) => tone(f, t + i * 0.13, 0.3, 'triangle', 0.12));
         break;

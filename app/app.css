@@ -192,15 +192,16 @@ button.armed { background: var(--bad); color: #fff; }
 .cube .bottom { transform: rotateX(-90deg) translateZ(17px); }
 .cube .right { transform: rotateY(90deg) translateZ(17px); }
 .cube .left { transform: rotateY(-90deg) translateZ(17px); }
-.cube[data-face="1"] { transform: rotateX(-12deg) rotateY(14deg); }
-.cube[data-face="6"] { transform: rotateX(-12deg) rotateY(194deg); }
-.cube[data-face="2"] { transform: rotateX(-102deg) rotateY(14deg); }
-.cube[data-face="5"] { transform: rotateX(78deg) rotateY(14deg); }
-.cube[data-face="3"] { transform: rotateX(-12deg) rotateY(-76deg); }
-.cube[data-face="4"] { transform: rotateX(-12deg) rotateY(104deg); }
+.cube { transform: rotateX(var(--fx, -12deg)) rotateY(var(--fy, 14deg)); }
+.cube[data-face="1"] { --fx: -12deg; --fy: 14deg; }
+.cube[data-face="6"] { --fx: -12deg; --fy: 194deg; }
+.cube[data-face="2"] { --fx: -102deg; --fy: 14deg; }
+.cube[data-face="5"] { --fx: 78deg; --fy: 14deg; }
+.cube[data-face="3"] { --fx: -12deg; --fy: -76deg; }
+.cube[data-face="4"] { --fx: -12deg; --fy: 104deg; }
 .dwrap.rolling { animation: tumble 1s cubic-bezier(0.2, 0.7, 0.3, 1) both; }
 .dwrap.rolling.d2 { animation-name: tumble2; animation-duration: 1.05s; }
-.dwrap.rolling .cube { transition: none; animation: spin 1s linear both; }
+.dwrap.rolling .cube { transition: none; animation: spin 1s cubic-bezier(0.15, 0.6, 0.3, 1) both; }
 .dwrap.rolling.d2 .cube { animation-name: spin2; }
 @keyframes tumble {
   0% { transform: translate(-140px, -90px) scale(0.7); opacity: 0; }
@@ -218,8 +219,8 @@ button.armed { background: var(--bad); color: #fff; }
   80% { transform: translate(-4px, 6px); }
   100% { transform: translate(0, 0); }
 }
-@keyframes spin { 0% { transform: rotateX(0) rotateY(0) rotateZ(0); } 100% { transform: rotateX(720deg) rotateY(1080deg) rotateZ(360deg); } }
-@keyframes spin2 { 0% { transform: rotateX(0) rotateY(0) rotateZ(0); } 100% { transform: rotateX(-1080deg) rotateY(720deg) rotateZ(-360deg); } }
+@keyframes spin { 0% { transform: rotateX(calc(var(--fx, -12deg) - 720deg)) rotateY(calc(var(--fy, 14deg) - 1080deg)) rotateZ(-360deg); } 100% { transform: rotateX(var(--fx, -12deg)) rotateY(var(--fy, 14deg)) rotateZ(0deg); } }
+@keyframes spin2 { 0% { transform: rotateX(calc(var(--fx, -12deg) + 1080deg)) rotateY(calc(var(--fy, 14deg) - 720deg)) rotateZ(360deg); } 100% { transform: rotateX(var(--fx, -12deg)) rotateY(var(--fy, 14deg)) rotateZ(0deg); } }
 .dice { font-size: 22px; line-height: 1; letter-spacing: 2px; vertical-align: middle; }
 
 /* ---- tokens: hop, jail, tap-to-roll */
@@ -259,3 +260,8 @@ button.armed { background: var(--bad); color: #fff; }
 @keyframes floatup { 0% { transform: translateY(6px); opacity: 0; } 15% { opacity: 1; } 100% { transform: translateY(-22px); opacity: 0; } }
 details.deedbox summary { color: var(--muted); font-size: 13px; cursor: pointer; padding: 6px 0; }
 .waiting { color: var(--muted); font-size: 14px; padding: 4px 0; }
+
+/* ---- off to jail: siren flash over the board */
+.board.siren::after { content: ''; position: absolute; inset: 0; pointer-events: none; animation: siren 0.4s linear infinite; border-radius: 10px; }
+@keyframes siren { 0%, 49% { box-shadow: inset 0 0 0 10px rgba(255, 40, 40, 0.75); background: rgba(255, 0, 0, 0.08); } 50%, 100% { box-shadow: inset 0 0 0 10px rgba(60, 110, 255, 0.8); background: rgba(0, 60, 255, 0.08); } }
+.centre .notice.jail { background: #2b2340; color: #fff; font-size: clamp(14px, 4.5vw, 22px); animation: slidein 0.3s ease-out; }

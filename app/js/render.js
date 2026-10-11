@@ -62,7 +62,8 @@ export function boardHtml(s, opts = {}) {
   });
   const cur = s.players[s.turn];
   let notice = '';
-  if (s.phase === 'lobby') notice = `<div class="notice">Waiting to start</div>`;
+  if (opts.siren) notice = `<div class="notice jail">🚔 ${esc(player(s, opts.siren).name)} goes to Jail!</div>`;
+  else if (s.phase === 'lobby') notice = `<div class="notice">Waiting to start</div>`;
   else if (s.phase === 'over') notice = `<div class="notice">🏆 ${esc(player(s, s.winner).name)} wins</div>`;
   else if (s.auction) notice = `<div class="notice">🔨 ${esc(SPACES[s.auction.space].name)}<br>${s.auction.bidder ? `${money(s.auction.bid)} · ${esc(player(s, s.auction.bidder).name)}` : 'no bids yet'}</div>`;
   const centre = `<div class="centre">
@@ -70,7 +71,7 @@ export function boardHtml(s, opts = {}) {
     ${diceHtml(opts.dice || s.dice, opts.rolling)}
     ${notice}
   </div>`;
-  return `<div class="board ${opts.small ? 'small' : ''}">${cells.join('')}${centre}</div>`;
+  return `<div class="board ${opts.small ? 'small' : ''} ${opts.siren ? 'siren' : ''}">${cells.join('')}${centre}</div>`;
 }
 
 // The thing that just happened, shown on EVERY phone under the board: a drawn card, rent

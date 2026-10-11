@@ -21,7 +21,7 @@ export function startTable(root, { code, link, fresh, onHome }) {
   const names = new Map(); // code -> name said in hello
   const sendLocal = (action) => dispatch(action, code);
 
-  const presenter = createPresenter({ render: draw, onStep: (k) => sound.play(k === 'dice' ? 'dice' : k === 'jail' ? 'pay' : 'hop') });
+  const presenter = createPresenter({ render: draw, onStep: (k) => sound.play(k === 'dice' ? 'dice' : k === 'jail' ? 'siren' : 'hop') });
 
   link.disconnect(); // a table never dials out
   link.setHandlers({

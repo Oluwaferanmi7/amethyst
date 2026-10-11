@@ -16,7 +16,7 @@ export function startPlayer(root, { code, link, tableCode, name, token, onHome }
   let ui = { space: null, trade: EMPTY_TRADE(), small: load('am.small', false) };
   let status = 'connecting';
 
-  const presenter = createPresenter({ render: draw, onStep: (k) => sound.play(k === 'dice' ? 'dice' : k === 'jail' ? 'pay' : 'hop') });
+  const presenter = createPresenter({ render: draw, onStep: (k) => sound.play(k === 'dice' ? 'dice' : k === 'jail' ? 'siren' : 'hop') });
 
   link.setHandlers({
     onOpen: () => link.send({ t: 'hello', name, token }),
