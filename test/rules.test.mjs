@@ -14,6 +14,15 @@ function table(names = ['Ann', 'Bob']) {
 }
 const roll = (s, dice, by = current(s).id) => reduce(s, { type: 'roll', by, dice }, noRng);
 const act = (s, type, extra = {}) => reduce(s, { type, by: current(s).id, ...extra }, noRng);
+// Tap through whatever the current player must acknowledge (rent, tax, a drawn card).
+const settle = (s) => {
+  for (let k = 0; k < 5 && s.pending && ['rent', 'tax', 'card'].includes(s.pending.type); k++) {
+    s = reduce(s, { type: s.pending.type === 'card' ? 'cardOk' : 'pay', by: current(s).id }, noRng);
+  }
+  return s;
+};
+// Roll and tap through what follows.
+const rollS = (s, dice, by = current(s).id) => settle(reduce(s, { type: 'roll', by, dice }, noRng));
 // Pass on a purchase and let everyone sit out the auction.
 const noBuy = (s) => {
   s = act(s, 'decline');
@@ -83,7 +92,7 @@ test('landing on an owned street pays the owner', () => {
   let s = table();
   give(s, 'p2', 1);
   give(s, 'p2', 3);
-  s = roll(s, [1, 2]); // Harbor Lane, set owned → 4 x 2 = 8
+  s = rollS(s, [1, 2]); // Harbor Lane, set owned → 4 x 2 = 8
   assert.equal(player(s, 'p1').cash, START_CASH - 8);
   assert.equal(player(s, 'p2').cash, START_CASH + 8);
   assert.equal(s.debt, null);
@@ -119,12 +128,12 @@ test('passing GO pays the salary, landing on it too', () => {
 
 test('doubles roll again; three doubles go to jail', () => {
   let s = table();
-  s = roll(s, [1, 1]); // → 2 Community Chest (file order deck: card 0 = Advance to GO)
+  s = rollS(s, [1, 1]); // → 2 Community Chest (file order deck: card 0 = Advance to GO)
   assert.equal(s.doubles, 1);
   assert.equal(s.rolled, false);
   assert.ok(legal(s, 'p1').has('roll'));
-  s = roll(s, [2, 2]);
-  s = roll(s, [3, 3]);
+  s = rollS(s, [2, 2]);
+  s = rollS(s, [3, 3]);
   const p = player(s, 'p1');
   assert.equal(p.inJail, true);
   assert.equal(p.pos, JAIL_POS);
@@ -184,7 +193,7 @@ test('get out of jail free card is kept and usable', () => {
   const idx = CHANCE.findIndex((c) => c.effect.jailFree);
   s.decks.chance = [idx, ...s.decks.chance.filter((i) => i !== idx)];
   s.players[0].pos = 4;
-  s = roll(s, [1, 2]); // 7 Chance
+  s = rollS(s, [1, 2]); // 7 Chance
   assert.equal(player(s, 'p1').jailFree, 1);
   assert.equal(s.decks.chance.includes(idx), false, 'card is out of the deck while held');
   s.players[0].inJail = true;
@@ -200,11 +209,11 @@ test('get out of jail free card is kept and usable', () => {
 
 test('taxes charge the bank', () => {
   let s = table();
-  s = roll(s, [1, 3]); // 4 Income Tax
+  s = rollS(s, [1, 3]); // 4 Income Tax
   assert.equal(player(s, 'p1').cash, START_CASH - 200);
   s = table();
   s.players[0].pos = 36;
-  s = roll(s, [1, 1]); // 38 Luxury Tax
+  s = rollS(s, [1, 1]); // 38 Luxury Tax
   assert.equal(player(s, 'p1').cash, START_CASH - 100);
 });
 
@@ -217,31 +226,31 @@ test('chance cards: advance to GO, back three, pay each player, nearest rail dou
     return s;
   };
   let s = atChance(chance((e) => e.to === 0));
-  s = roll(s, [1, 2]); // 7 Chance → GO
+  s = rollS(s, [1, 2]); // 7 Chance → GO
   assert.equal(player(s, 'p1').pos, 0);
   assert.equal(player(s, 'p1').cash, START_CASH + GO_SALARY);
 
   s = atChance(chance((e) => e.move === -3));
-  s = roll(s, [1, 2]); // 7 → back 3 → 4 Income Tax
+  s = rollS(s, [1, 2]); // 7 → back 3 → 4 Income Tax
   assert.equal(player(s, 'p1').pos, 4);
   assert.equal(player(s, 'p1').cash, START_CASH - 200);
 
   s = atChance(chance((e) => e.each === -50));
-  s = roll(s, [1, 2]);
+  s = rollS(s, [1, 2]);
   assert.equal(player(s, 'p1').cash, START_CASH - 100);
   assert.equal(player(s, 'p2').cash, START_CASH + 50);
   assert.equal(player(s, 'p3').cash, START_CASH + 50);
 
   s = atChance(chance((e) => e.nearest === 'rail'));
   give(s, 'p2', 15); // East Station, one rail → 25, doubled 50
-  s = roll(s, [1, 2]);
+  s = rollS(s, [1, 2]);
   assert.equal(player(s, 'p1').pos, 15);
   assert.equal(player(s, 'p1').cash, START_CASH - 50);
   assert.equal(player(s, 'p2').cash, START_CASH + 50);
 
   s = atChance(chance((e) => e.nearest === 'utility'));
   give(s, 'p2', 12);
-  s = roll(s, [1, 2]);
+  s = rollS(s, [1, 2]);
   assert.deepEqual(s.pending, { type: 'utilityRoll', space: 12 });
   assert.deepEqual([...legal(s, 'p1')].filter((a) => a !== 'propose'), ['roll']);
   s = roll(s, [4, 5]);
@@ -249,7 +258,7 @@ test('chance cards: advance to GO, back three, pay each player, nearest rail dou
   assert.equal(s.pending, null);
 
   s = atChance(chance((e) => e.to === 5), 33); // trip to North Station from the last Chance → passes GO
-  s = roll(s, [1, 2]); // 36 Chance
+  s = rollS(s, [1, 2]); // 36 Chance
   assert.equal(player(s, 'p1').pos, 5);
   assert.equal(player(s, 'p1').cash, START_CASH + GO_SALARY);
   assert.deepEqual(s.pending, { type: 'buy', space: 5 });
@@ -261,13 +270,13 @@ test('community chest: repairs bill per building, birthday collects from everyon
   s.decks.chest = [chest((e) => e.repairs), ...s.decks.chest.filter((i) => i !== chest((e) => e.repairs))];
   give(s, 'p1', 1, 3);
   give(s, 'p1', 3, 5);
-  s = roll(s, [1, 1]); // 2 Community Chest
+  s = rollS(s, [1, 1]); // 2 Community Chest
   assert.equal(player(s, 'p1').cash, START_CASH - (3 * 40 + 115));
 
   s = table(['Ann', 'Bob', 'Cy']);
   const bday = chest((e) => e.each === 10);
   s.decks.chest = [bday, ...s.decks.chest.filter((i) => i !== bday)];
-  s = roll(s, [1, 1]);
+  s = rollS(s, [1, 1]);
   assert.equal(player(s, 'p1').cash, START_CASH + 20);
   assert.equal(player(s, 'p2').cash, START_CASH - 10);
 });
@@ -319,7 +328,7 @@ test('debt: must raise cash, then pay; bankruptcy hands everything to the credit
   give(s, 'p1', 1);
   give(s, 'p1', 3);
   s.players[0].pos = 36;
-  s = roll(s, [1, 2]); // 39
+  s = rollS(s, [1, 2]); // 39
   assert.equal(debtTotal(s), 2000);
   assert.equal(player(s, 'p1').cash, START_CASH, 'cash untouched until paid');
   let opts = legal(s, 'p1');
@@ -344,7 +353,7 @@ test('debt can be paid once there is enough cash, and the game goes on with thre
   give(s, 'p1', 32);
   give(s, 'p1', 34);
   s.players[0].pos = 36;
-  s = roll(s, [1, 2]);
+  s = rollS(s, [1, 2]);
   s = act(s, 'mortgage', { space: 31 }); // +150
   s = act(s, 'mortgage', { space: 32 }); // +150
   s = act(s, 'mortgage', { space: 34 }); // +160 → 1960 still short
@@ -422,7 +431,7 @@ test('trade: propose, accept moves deeds and cash both ways; reject clears it', 
   assert.equal(s.trade.from, 'p2');
   assert.deepEqual([...legal(s, 'p1')].filter((a) => a.includes('Trade')), ['acceptTrade', 'rejectTrade']);
   assert.ok(legal(s, 'p2').has('cancelTrade'));
-  assert.throws(() => reduce(s, { ...offer, by: 'p1', to: 'p2' }, noRng), /propose/);
+  assert.throws(() => reduce(s, { ...offer, by: 'p2' }, noRng), /propose/, 'the proposer cannot re-propose while it is pending');
   let r = reduce(s, { type: 'rejectTrade', by: 'p1' }, noRng);
   assert.equal(r.trade, null);
   assert.equal(r.props[1].owner, 'p1');
@@ -455,4 +464,65 @@ test('trade: accepting re-checks the offer after things changed', () => {
   s = reduce(s, { type: 'propose', by: 'p1', to: 'p2', give: { cash: 0, props: [1] }, get: { cash: 300, props: [] } }, noRng);
   s.players[1].cash = 100; // Bob spent his money meanwhile
   assert.throws(() => reduce(s, { type: 'acceptTrade', by: 'p2' }, noRng), /doesn't have/);
+});
+
+test('rent, tax and cards wait for the player to tap before money moves', () => {
+  let s = table();
+  give(s, 'p2', 3);
+  s = roll(s, [1, 2]);
+  assert.deepEqual(s.pending, { type: 'rent', space: 3, amount: 4, to: 'p2' });
+  assert.equal(player(s, 'p1').cash, START_CASH, 'nothing taken yet');
+  assert.deepEqual([...legal(s, 'p1')].filter((a) => a !== 'propose'), ['pay']);
+  s = act(s, 'pay');
+  assert.equal(player(s, 'p1').cash, START_CASH - 4);
+  assert.equal(player(s, 'p2').cash, START_CASH + 4);
+  assert.ok(legal(s, 'p1').has('endTurn'));
+
+  s = table();
+  s = roll(s, [1, 3]); // Income Tax
+  assert.equal(s.pending.type, 'tax');
+  s = act(s, 'pay');
+  assert.equal(player(s, 'p1').cash, START_CASH - 200);
+
+  s = table();
+  s = roll(s, [1, 1]); // Community Chest, card 0 = Advance to GO
+  assert.equal(s.pending.type, 'card');
+  assert.equal(s.card.text, CHEST[0].text);
+  assert.equal(player(s, 'p1').pos, 2, 'not moved until tapped');
+  s = act(s, 'cardOk');
+  assert.equal(player(s, 'p1').pos, 0);
+  assert.equal(player(s, 'p1').cash, START_CASH + GO_SALARY);
+  assert.equal(s.rolled, false, 'doubles still earn another throw');
+});
+
+test('rolling 10 from GO is just visiting: no jail, free to move next turn', () => {
+  let s = table();
+  s = roll(s, [4, 6]);
+  const a = player(s, 'p1');
+  assert.equal(a.pos, JAIL_POS);
+  assert.equal(a.inJail, false);
+  assert.ok(legal(s, 'p1').has('endTurn'));
+  s = act(s, 'endTurn');
+  s = roll(s, [1, 2], 'p2');
+  s = noBuy(s);
+  s = act(s, 'endTurn');
+  assert.ok(legal(s, 'p1').has('roll') && !legal(s, 'p1').has('jailPay'));
+  s = roll(s, [2, 3]);
+  assert.equal(player(s, 'p1').pos, 15);
+});
+
+test('trade: the receiver can counter instead of accepting', () => {
+  let s = table();
+  give(s, 'p1', 1);
+  give(s, 'p2', 3);
+  s = reduce(s, { type: 'propose', by: 'p1', to: 'p2', give: { cash: 0, props: [1] }, get: { cash: 50, props: [3] } }, noRng);
+  assert.ok(legal(s, 'p2').has('propose'));
+  assert.throws(() => reduce(s, { type: 'propose', by: 'p2', to: 'p2', give: { cash: 10 } }, noRng));
+  s = reduce(s, { type: 'propose', by: 'p2', to: 'p1', give: { cash: 0, props: [3] }, get: { cash: 20, props: [1] } }, noRng);
+  assert.equal(s.trade.from, 'p2');
+  assert.equal(s.trade.to, 'p1');
+  s = reduce(s, { type: 'acceptTrade', by: 'p1' }, noRng);
+  assert.equal(s.props[1].owner, 'p2');
+  assert.equal(s.props[3].owner, 'p1');
+  assert.equal(player(s, 'p1').cash, START_CASH - 20);
 });

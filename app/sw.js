@@ -1,6 +1,6 @@
 // Offline cache for the app shell. Stale-while-revalidate: opens instantly, refreshes
 // in the background for the next launch. Bump VERSION on every release.
-const VERSION = 'amethyst-v2';
+const VERSION = 'amethyst-v3';
 const SHELL = [
   './',
   'index.html',
@@ -16,6 +16,7 @@ const SHELL = [
   'js/link.js',
   'js/store.js',
   'js/sound.js',
+  'js/anim.js',
   'vendor/peerjs.min.js',
   'icons/icon-192.png',
   'icons/icon-512.png',

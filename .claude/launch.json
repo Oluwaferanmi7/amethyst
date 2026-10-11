@@ -4,8 +4,8 @@
     {
       "name": "amethyst",
       "runtimeExecutable": "node",
-      "runtimeArgs": ["tools/serve.mjs", "8765"],
-      "port": 8765
+      "runtimeArgs": ["tools/serve.mjs", "8766"],
+      "port": 8766
     }
   ]
 }

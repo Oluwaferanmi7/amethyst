@@ -132,7 +132,7 @@ export function legal(s, id) {
   }
   // Trades run alongside the turn: the receiver answers, the proposer can withdraw.
   if (s.trade) {
-    if (s.trade.to === id) out.add('acceptTrade').add('rejectTrade');
+    if (s.trade.to === id) out.add('acceptTrade').add('rejectTrade').add('propose'); // propose = counter-offer
     if (s.trade.from === id) out.add('cancelTrade');
   } else if (alive(s).length > 1) {
     out.add('propose');
@@ -151,6 +151,10 @@ export function legal(s, id) {
     out.add('decline');
   } else if (s.pending?.type === 'utilityRoll') {
     out.add('roll');
+  } else if (s.pending?.type === 'rent' || s.pending?.type === 'tax') {
+    out.add('pay');
+  } else if (s.pending?.type === 'card') {
+    out.add('cardOk');
   } else if (!s.rolled) {
     out.add('roll');
     if (p.inJail) {
@@ -248,6 +252,25 @@ function playerAction(s, p, a, rng) {
   switch (a.type) {
     case 'roll': return doRoll(s, p, rng, a.dice);
     case 'buy': return doBuy(s, p);
+    case 'pay': {
+      // Rent or tax the player has seen and is now settling (debt flow if they're short).
+      const pd = s.pending;
+      s.pending = null;
+      if (pd.type === 'rent') {
+        s._log(`${p.name} pays ${money(pd.amount)} rent to ${player(s, pd.to).name}`);
+        charge(s, p, pd.to, pd.amount, `Rent for ${SPACES[pd.space].name}`);
+      } else {
+        s._log(`${p.name} pays ${money(pd.amount)} ${SPACES[pd.space].name}`);
+        charge(s, p, 'bank', pd.amount, SPACES[pd.space].name);
+      }
+      return;
+    }
+    case 'cardOk': {
+      const { deck, idx } = s.pending;
+      s.pending = null;
+      applyCard(s, p, deck, idx);
+      return;
+    }
     case 'decline': {
       const space = s.pending.space;
       s.pending = null;
@@ -272,9 +295,11 @@ function playerAction(s, p, a, rng) {
       return;
     }
     case 'propose': {
+      const countering = s.trade && s.trade.to === p.id;
+      if (countering && a.to !== s.trade.from) fail('Counter the player who offered');
       const t = validateTrade(s, p.id, a);
       s.trade = t;
-      s._log(`${p.name} offers ${player(s, t.to).name} a trade: ${tradeText(s, t)}`);
+      s._log(`${p.name} ${countering ? 'counters with' : `offers ${player(s, t.to).name} a trade:`} ${tradeText(s, t)}`);
       return;
     }
     case 'acceptTrade': {
@@ -463,14 +488,14 @@ function land(s, p) {
         s._log(`${p.name} lands on ${sp.name} (mortgaged, no rent)`);
       } else {
         const rent = rentAt(s, p.pos, s.dice);
-        s._log(`${p.name} lands on ${sp.name}, rent ${money(rent)} to ${player(s, pr.owner).name}`);
-        charge(s, p, pr.owner, rent, `Rent for ${sp.name}`);
+        s._log(`${p.name} lands on ${sp.name}: ${money(rent)} rent due to ${player(s, pr.owner).name}`);
+        s.pending = { type: 'rent', space: p.pos, amount: rent, to: pr.owner };
       }
       return;
     }
     case 'tax':
-      s._log(`${p.name} lands on ${sp.name}: ${money(sp.amount)}`);
-      charge(s, p, 'bank', sp.amount, sp.name);
+      s._log(`${p.name} lands on ${sp.name}: ${money(sp.amount)} due`);
+      s.pending = { type: 'tax', space: p.pos, amount: sp.amount };
       return;
     case 'chance': return drawCard(s, p, 'chance');
     case 'chest': return drawCard(s, p, 'chest');
@@ -618,12 +643,42 @@ function returnJailFree(s) {
   }
 }
 
+// Drawing shows the card to everyone; the player then taps to apply it (cardOk).
 function drawCard(s, p, deck) {
   const cards = deck === 'chance' ? CHANCE : CHEST;
   const idx = s.decks[deck].shift();
   const card = cards[idx];
   s.card = { deck, text: card.text, by: p.id };
+  s.pending = { type: 'card', deck, idx };
   s._log(`${p.name} draws ${deck === 'chance' ? 'Chance' : 'Community Chest'}: "${card.text}"`);
+}
+
+// The card a pending 'card' refers to.
+export const pendingCard = (s) => (s.pending?.type === 'card' ? (s.pending.deck === 'chance' ? CHANCE : CHEST)[s.pending.idx] : null);
+
+// What the player's button should say for the card in front of them.
+export function cardButtonLabel(card, s, id) {
+  const e = card.effect;
+  if (e.cash > 0) return `Collect ${money(e.cash)}`;
+  if (e.cash < 0) return `Pay ${money(-e.cash)}`;
+  if (e.each > 0) return `Collect ${money(e.each)} from each player`;
+  if (e.each < 0) return `Pay ${money(-e.each)} to each player`;
+  if (e.repairs) {
+    let total = 0;
+    for (const i of owned(s, id)) {
+      const h = s.props[i].houses;
+      total += h === 5 ? e.repairs[1] : h * e.repairs[0];
+    }
+    return total ? `Pay ${money(total)}` : 'Nothing to repair';
+  }
+  if (e.jail) return 'Go to Jail';
+  if (e.jailFree) return 'Keep the card';
+  return 'Go';
+}
+
+function applyCard(s, p, deck, idx) {
+  const cards = deck === 'chance' ? CHANCE : CHEST;
+  const card = cards[idx];
   const e = card.effect;
   if (e.jailFree) {
     p.jailFree++; // kept by the player, not returned to the deck yet
@@ -676,8 +731,8 @@ function drawCard(s, p, deck) {
       s._log(`${p.name} arrives at ${sp.name}, no rent due`);
     } else if (e.nearest === 'rail') {
       const rent = rentAt(s, i, s.dice) * 2;
-      s._log(`${p.name} arrives at ${sp.name}, double rent ${money(rent)} to ${player(s, pr.owner).name}`);
-      charge(s, p, pr.owner, rent, `Double rent for ${sp.name}`);
+      s._log(`${p.name} arrives at ${sp.name}: double rent ${money(rent)} due to ${player(s, pr.owner).name}`);
+      s.pending = { type: 'rent', space: i, amount: rent, to: pr.owner, double: true };
     } else {
       s.pending = { type: 'utilityRoll', space: i };
       s._log(`${p.name} arrives at ${sp.name}: roll again and pay 10× the throw`);
