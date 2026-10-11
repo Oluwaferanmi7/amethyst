@@ -356,29 +356,17 @@ body {
 .board.settle { transition: transform 0.7s cubic-bezier(0.2, 0.7, 0.2, 1); }
 .board.siren { transition: transform 0.5s ease; }
 .board.small { --tilt: 0deg; }
-/* dice on the board, next to the piece that threw them */
-.dice3d.onboard { position: absolute; transform: translate(-50%, -50%); z-index: 3; height: auto; gap: 8px; pointer-events: none; }
-.dice3d.onboard .dwrap { width: 26px; height: 26px; }
-.dice3d.onboard .cube .f { border-radius: 4px; }
-.dice3d.onboard .cube .front { transform: translateZ(13px); }
-.dice3d.onboard .cube .back { transform: rotateY(180deg) translateZ(13px); }
-.dice3d.onboard .cube .top { transform: rotateX(90deg) translateZ(13px); }
-.dice3d.onboard .cube .bottom { transform: rotateX(-90deg) translateZ(13px); }
-.dice3d.onboard .cube .right { transform: rotateY(90deg) translateZ(13px); }
-.dice3d.onboard .cube .left { transform: rotateY(-90deg) translateZ(13px); }
-.dice3d.onboard .dwrap.rolling { animation-name: tumbleB; }
-.dice3d.onboard .dwrap.rolling.d2 { animation-name: tumbleB2; }
-@keyframes tumbleB {
-  0% { transform: translate(-90px, -70px) scale(0.6); opacity: 0; }
-  10% { opacity: 1; }
-  40% { transform: translate(-30px, 14px) scale(1.15); }
-  70% { transform: translate(-6px, -10px) scale(1); }
-  100% { transform: translate(0, 0); }
-}
-@keyframes tumbleB2 {
-  0% { transform: translate(90px, -60px) scale(0.6); opacity: 0; }
-  10% { opacity: 1; }
-  40% { transform: translate(34px, 16px) scale(1.15); }
-  70% { transform: translate(8px, -8px) scale(1); }
-  100% { transform: translate(0, 0); }
+
+/* ---- dice overlay: always in the middle of the board area, above the camera */
+.boardwrap { position: relative; }
+.diceover { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 4; display: flex; flex-direction: column; align-items: center; gap: 2px; pointer-events: none; }
+.diceover .dice3d { filter: drop-shadow(0 6px 10px rgba(0,0,0,0.45)); }
+.diceover.idle { opacity: 0.35; }
+.diceover.tapdice { pointer-events: auto; cursor: pointer; }
+.diceover.tapdice .dice3d { animation: beckon 1.2s ease-in-out infinite alternate; }
+@keyframes beckon { from { transform: scale(1); } to { transform: scale(1.12); } }
+.dicehint { font-size: 11px; font-weight: 700; color: #fff; background: var(--acc); border-radius: 999px; padding: 2px 8px; text-shadow: 0 1px 1px rgba(0,0,0,0.3); }
+.board.zoomed { --tilt: 4deg; }
+@media (orientation: landscape) and (max-height: 620px) {
+  .boardwrap { padding-right: 8px; }
 }

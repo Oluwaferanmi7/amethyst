@@ -11,13 +11,16 @@
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
 export const DICE_MS = 1100;
+export const REST_ZOOM = 1.45; // camera on whoever's turn it is
+export const FOLLOW_ZOOM = 1.6; // while their token moves
 export const HOP_MS = 150;
+
+const whose = (st) => (st && st.phase === 'play' && st.players[st.turn] && !st.players[st.turn].bankrupt ? st.players[st.turn].pos : null);
 
 export function createPresenter({ render, onStep }) {
   let view = null;
   let queue = [];
   let busy = false;
-  let diceAt = null; // cell the last throw happened on
 
   async function drain() {
     busy = true;
@@ -44,8 +47,7 @@ export function createPresenter({ render, onStep }) {
   async function present(prev, next) {
     const deltas = cashDeltas(prev, next);
     if (!prev || prev.id !== next.id || prev.phase !== 'play' || next.phase === 'lobby') {
-      diceAt = null;
-      render(next, { deltas });
+      render(next, { deltas, focus: whose(next), zoom: REST_ZOOM, settle: true });
       return;
     }
     const diceChanged = JSON.stringify(prev.dice) !== JSON.stringify(next.dice);
@@ -59,19 +61,17 @@ export function createPresenter({ render, onStep }) {
 
     const override = {};
     if (diceChanged) {
-      const roller = prev.players[prev.turn];
-      diceAt = roller ? roller.pos : null;
-      render(prev, { dice: next.dice, rolling: true, override, animating: true, diceAt, focus: diceAt, zoom: 1.35 });
+      render(prev, { dice: next.dice, rolling: true, override, animating: true, focus: whose(prev), zoom: REST_ZOOM, settle: true });
       onStep?.('dice');
       await wait(DICE_MS);
     }
     for (const m of moves) {
       if (m.jump) {
         onStep?.('jail');
-        render(prev, { dice: next.dice, override, siren: m.id, animating: true, diceAt, focus: m.from, zoom: 1.5 });
+        render(prev, { dice: next.dice, override, siren: m.id, animating: true, focus: m.from, zoom: FOLLOW_ZOOM });
         await wait(900);
         override[m.id] = m.to;
-        render(prev, { dice: next.dice, override, hop: m.id, siren: m.id, animating: true, diceAt, focus: m.to, zoom: 1.5 });
+        render(prev, { dice: next.dice, override, hop: m.id, siren: m.id, animating: true, focus: m.to, zoom: FOLLOW_ZOOM });
         await wait(900);
         continue;
       }
@@ -81,12 +81,12 @@ export function createPresenter({ render, onStep }) {
       const steps = dir === 1 ? fwd : back;
       for (let k = 1; k <= steps; k++) {
         override[m.id] = (m.from + dir * k + 40) % 40;
-        render(prev, { dice: next.dice, override, hop: m.id, animating: true, diceAt, focus: override[m.id], zoom: 1.7 });
+        render(prev, { dice: next.dice, override, hop: m.id, animating: true, focus: override[m.id], zoom: FOLLOW_ZOOM });
         onStep?.('hop');
         await wait(k === steps ? HOP_MS * 2 : HOP_MS);
       }
     }
-    render(next, { deltas, diceAt, settle: true });
+    render(next, { deltas, focus: whose(next), zoom: REST_ZOOM, settle: true });
   }
 
   return {
@@ -96,7 +96,7 @@ export function createPresenter({ render, onStep }) {
     },
     // Re-draw the current view (after a UI-only change) without re-animating.
     redraw() {
-      if (view && !busy) render(view, { diceAt });
+      if (view && !busy) render(view, { focus: whose(view), zoom: REST_ZOOM });
     },
     get view() {
       return view;

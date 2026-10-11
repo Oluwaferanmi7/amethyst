@@ -4,7 +4,7 @@
 
 import { renderHand } from './hand.js';
 import { current, legal } from './rules.js';
-import { boardHtml, spaceModal, eventHtml, toast, keepBoardNode } from './render.js';
+import { boardHtml, spaceModal, eventHtml, toast, keepBoardNode, diceOverlayHtml } from './render.js';
 import { load, save } from './store.js';
 import { sound } from './sound.js';
 import { createPresenter } from './anim.js';
@@ -55,12 +55,12 @@ export function startPlayer(root, { code, link, tableCode, name, token, onHome }
     const oldBoard = root.querySelector('.board');
     root.innerHTML = `
       <div class="player screen">
-        ${v ? `<div class="boardwrap">${boardHtml(v, { highlight: cur?.pos, meId: code, small: ui.small, mine, ...opts })}</div>` : ''}
+        ${v ? `<div class="boardwrap">${boardHtml(v, { highlight: cur?.pos, meId: code, mine, ...opts, ...(ui.small ? { focus: null } : {}) })}${diceOverlayHtml(opts.dice || v.dice, opts.rolling, mine)}</div>` : ''}
         <div class="side">
           <header class="th">
             <button class="lnk" data-home>‹ Leave</button>
             <div class="codepill">Table <b>${tableCode}</b></div>
-            <span><button class="lnk" data-small title="Board size">${ui.small ? '⤢' : '⤡'}</button><button class="lnk" data-mute>${sound.muted ? '🔇' : '🔊'}</button></span>
+            <span><button class="lnk" data-small title="${ui.small ? 'Follow the player' : 'Whole board'}">${ui.small ? '⤢' : '⤡'}</button><button class="lnk" data-mute>${sound.muted ? '🔇' : '🔊'}</button></span>
           </header>
           ${conn}
           <div class="rotate-hint">Turn your phone sideways for the full table</div>
@@ -86,6 +86,7 @@ export function startPlayer(root, { code, link, tableCode, name, token, onHome }
     root.querySelector('[data-mute]')?.addEventListener('click', () => { sound.toggle(); redraw(); });
     root.querySelector('[data-small]')?.addEventListener('click', () => { ui.small = !ui.small; save('am.small', ui.small); redraw(); });
     root.querySelectorAll('[data-close]').forEach((b) => b.addEventListener('click', (e) => { if (e.target === b) { ui.space = null; redraw(); } }));
+    root.querySelector('[data-roll]')?.addEventListener('click', () => send({ type: 'roll', by: code }));
     root.querySelectorAll('.player .cell[data-space]').forEach((el) =>
       el.addEventListener('click', () => {
         if (mine && el.classList.contains('tapme')) return send({ type: 'roll', by: code });

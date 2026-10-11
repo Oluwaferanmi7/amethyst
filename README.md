@@ -7,7 +7,7 @@ A property-trading board game for phones, with places from the Bible (Bethlehem 
 1. Open the app on every phone (add it to the home screen if you like).
 2. One phone taps **Host a table** and reads out its code. The host can tap **I'm playing too** to take a seat.
 3. Everyone else taps **Join**, types the code and a name, picks a token.
-4. The table taps **Start game**. **Hold the phone sideways**: the board fills the left, your hand (cash, what to do now, your deeds as cards) sits on the right. Upright still works with the hand below the board. On your turn tap Roll (or your own piece on the board): the dice tumble onto the board next to your piece, the camera zooms in and follows your token as it hops square by square, then eases back out, and whatever you land on comes up as a card or a banner with one button: Buy / Pass, Pay rent, Pay tax, or the Chance / Community Chest card with Collect, Pay or Go. The ⤡ button shrinks the board, 🔊 mutes the sounds.
+4. The table taps **Start game**. **Hold the phone sideways**: the board fills the left, your hand (cash, what to do now, your deeds as cards) sits on the right. Upright still works with the hand below the board. The camera sits on whoever's turn it is. On your turn tap the dice in the middle (or Roll, or your own piece): the dice tumble, the camera follows your token as it hops square by square, then rests on you, and whatever you land on comes up as a card or a banner with one button: Buy / Pass, Pay rent, Pay tax, or the Chance / Community Chest card with Collect, Pay or Go. The ⤡ button shows the whole board instead of following, 🔊 mutes the sounds.
 
 Everyone needs internet. A phone that locks or loses signal reconnects on its own and lands back in the same seat.
 

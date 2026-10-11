@@ -74,11 +74,8 @@ export function boardHtml(s, opts = {}) {
   else if (s.phase === 'lobby') notice = `<div class="notice">Waiting to start</div>`;
   else if (s.phase === 'over') notice = `<div class="notice">🏆 ${esc(player(s, s.winner).name)} wins</div>`;
   else if (s.auction) notice = `<div class="notice">🔨 ${esc(SPACES[s.auction.space].name)}<br>${s.auction.bidder ? `${money(s.auction.bid)} · ${esc(player(s, s.auction.bidder).name)}` : 'no bids yet'}</div>`;
-  const at = opts.diceAt != null ? cellCentre(opts.diceAt) : null;
-  const dice = diceHtml(opts.dice || s.dice, opts.rolling, at);
   const centre = `<div class="centre">
     ${s.phase === 'play' && cur ? `<div class="whose" style="--c:${cur.color}">${cur.token} ${cur.id === opts.meId ? 'Your turn' : esc(cur.name)}${cur.inJail ? ' · in Jail' : ''}</div>` : `<div class="brand">Amethyst</div>`}
-    ${at ? '' : dice}
     ${notice}
   </div>`;
   // Camera: zoom onto the focused cell (translate first, then scale, so the cell lands centred).
@@ -87,7 +84,7 @@ export function boardHtml(s, opts = {}) {
     const c = cellCentre(opts.focus);
     cam = `--z:${opts.zoom || 1.7};--tx:${(50 - c.x).toFixed(2)}%;--ty:${(50 - c.y).toFixed(2)}%`;
   }
-  return `<div class="board ${opts.small ? 'small' : ''} ${opts.siren ? 'siren' : ''} ${opts.settle ? 'settle' : ''} ${opts.focus != null ? 'zoomed' : ''}" style="${cam}">${cells.join('')}${at ? dice : ''}${centre}</div>`;
+  return `<div class="board ${opts.small ? 'small' : ''} ${opts.siren ? 'siren' : ''} ${opts.settle ? 'settle' : ''} ${opts.focus != null ? 'zoomed' : ''}" style="${cam}">${cells.join('')}${centre}</div>`;
 }
 
 // The thing that just happened, shown on EVERY phone under the board: a drawn card, rent
@@ -246,4 +243,11 @@ export function keepBoardNode(root, old) {
   old.className = neu.className;
   old.setAttribute('style', neu.getAttribute('style') || '');
   neu.replaceWith(old);
+}
+
+// The dice, drawn over the board area (not inside the camera's transform), always centred.
+// `mine` = tapping them rolls.
+export function diceOverlayHtml(dice, rolling, mine) {
+  const d = dice || [1, 1];
+  return `<div class="diceover ${mine ? 'tapdice' : ''} ${dice ? '' : 'idle'}" ${mine ? 'data-roll title="Tap to roll"' : ''}>${diceHtml(d, rolling)}${mine ? '<span class="dicehint">tap to roll</span>' : ''}</div>`;
 }

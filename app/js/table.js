@@ -5,7 +5,7 @@
 import { newGame, reduce, player, current, legal } from './rules.js';
 import { TOKENS } from './board.js';
 import { renderHand } from './hand.js';
-import { esc, boardHtml, playersHtml, logHtml, spaceModal, eventHtml, toast, confirmTap, keepBoardNode } from './render.js';
+import { esc, boardHtml, playersHtml, logHtml, spaceModal, eventHtml, toast, confirmTap, keepBoardNode, diceOverlayHtml } from './render.js';
 import { load, save, remove } from './store.js';
 import { sound } from './sound.js';
 import { createPresenter } from './anim.js';
@@ -75,12 +75,12 @@ export function startTable(root, { code, link, fresh, onHome }) {
     const oldBoard = root.querySelector('.board');
     root.innerHTML = `
       <div class="table screen">
-        <div class="boardwrap">${boardHtml(v, { highlight: cur?.pos, meId: hostPlaying ? code : null, small: ui.small, mine, ...opts })}</div>
+        <div class="boardwrap">${boardHtml(v, { highlight: cur?.pos, meId: hostPlaying ? code : null, mine, ...opts, ...(ui.small ? { focus: null } : {}) })}${diceOverlayHtml(opts.dice || v.dice, opts.rolling, mine)}</div>
         <div class="side">
           <header class="th">
             <button class="lnk" data-home>‹</button>
             <div class="codepill">Table <b>${code}</b> · ${online.size} phone${online.size === 1 ? '' : 's'}</div>
-            <span><button class="lnk" data-small title="Board size">${ui.small ? '⤢' : '⤡'}</button><button class="lnk" data-mute>${sound.muted ? '🔇' : '🔊'}</button><button class="lnk" data-menu>⋯</button></span>
+            <span><button class="lnk" data-small title="${ui.small ? 'Follow the player' : 'Whole board'}">${ui.small ? '⤢' : '⤡'}</button><button class="lnk" data-mute>${sound.muted ? '🔇' : '🔊'}</button><button class="lnk" data-menu>⋯</button></span>
           </header>
           <div class="rotate-hint">Turn your phone sideways for the full table</div>
           <div class="under">
@@ -164,6 +164,7 @@ export function startTable(root, { code, link, fresh, onHome }) {
     );
     const ng = root.querySelector('[data-newgame]');
     if (ng) confirmTap(ng, 'Tap again: the current game is lost', newGameSamePlayers);
+    root.querySelector('[data-roll]')?.addEventListener('click', () => sendLocal({ type: 'roll', by: code }));
     root.querySelectorAll('.table .cell[data-space]').forEach((el) =>
       el.addEventListener('click', () => {
         if (mine && el.classList.contains('tapme')) return sendLocal({ type: 'roll', by: code });
