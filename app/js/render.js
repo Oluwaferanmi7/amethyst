@@ -23,13 +23,20 @@ const PIPS = { 1: [4], 2: [0, 8], 3: [0, 4, 8], 4: [0, 2, 6, 8], 5: [0, 2, 4, 6,
 const face = (n, cls) => `<div class="f ${cls}">${Array.from({ length: 9 }, (_, i) => `<i class="${PIPS[n].includes(i) ? 'on' : ''}"></i>`).join('')}</div>`;
 const cube = (n, k, rolling) =>
   `<div class="dwrap ${rolling ? 'rolling' : ''} d${k}"><div class="cube" data-face="${n}">${face(1, 'front')}${face(6, 'back')}${face(2, 'top')}${face(5, 'bottom')}${face(3, 'right')}${face(4, 'left')}</div></div>`;
-export const diceHtml = (dice, rolling) => (dice ? `<span class="dice3d">${cube(dice[0], 1, rolling)}${cube(dice[1], 2, rolling)}</span>` : '');
+export const diceHtml = (dice, rolling, at) => (dice ? `<span class="dice3d ${at ? 'onboard' : ''}" ${at ? `style="left:${at.x}%;top:${at.y}%"` : ''}>${cube(dice[0], 1, rolling)}${cube(dice[1], 2, rolling)}</span>` : '');
 // Small flat version for text lines.
 const FLAT = ['', '⚀', '⚁', '⚂', '⚃', '⚄', '⚅'];
 export const diceText = (dice) => (dice ? `<span class="dice">${FLAT[dice[0]]}${FLAT[dice[1]]}</span>` : '');
 
+// Centre of a cell in % of the board (for the camera and for dice landing near a token).
+export function cellCentre(i) {
+  const { col, row } = cellOf(i);
+  return { x: ((col - 0.5) / 11) * 100, y: ((row - 0.5) / 11) * 100 };
+}
+
 // opts: highlight, rolling, dice, override {id: pos}, hop (id), meId, small, mine (true when
-// tapping your own token should roll)
+// tapping your own token should roll), focus (cell index the camera zooms to), zoom, diceAt
+// (cell index the dice sit on), settle (true on the landing frame: slow ease back out)
 export function boardHtml(s, opts = {}) {
   const override = opts.override || {};
   const posOf = (p) => (override[p.id] !== undefined ? override[p.id] : p.pos);
@@ -67,12 +74,20 @@ export function boardHtml(s, opts = {}) {
   else if (s.phase === 'lobby') notice = `<div class="notice">Waiting to start</div>`;
   else if (s.phase === 'over') notice = `<div class="notice">🏆 ${esc(player(s, s.winner).name)} wins</div>`;
   else if (s.auction) notice = `<div class="notice">🔨 ${esc(SPACES[s.auction.space].name)}<br>${s.auction.bidder ? `${money(s.auction.bid)} · ${esc(player(s, s.auction.bidder).name)}` : 'no bids yet'}</div>`;
+  const at = opts.diceAt != null ? cellCentre(opts.diceAt) : null;
+  const dice = diceHtml(opts.dice || s.dice, opts.rolling, at);
   const centre = `<div class="centre">
     ${s.phase === 'play' && cur ? `<div class="whose" style="--c:${cur.color}">${cur.token} ${cur.id === opts.meId ? 'Your turn' : esc(cur.name)}${cur.inJail ? ' · in Jail' : ''}</div>` : `<div class="brand">Amethyst</div>`}
-    ${diceHtml(opts.dice || s.dice, opts.rolling)}
+    ${at ? '' : dice}
     ${notice}
   </div>`;
-  return `<div class="board ${opts.small ? 'small' : ''} ${opts.siren ? 'siren' : ''}">${cells.join('')}${centre}</div>`;
+  // Camera: zoom onto the focused cell (translate first, then scale, so the cell lands centred).
+  let cam = '';
+  if (opts.focus != null) {
+    const c = cellCentre(opts.focus);
+    cam = `--z:${opts.zoom || 1.7};--tx:${(50 - c.x).toFixed(2)}%;--ty:${(50 - c.y).toFixed(2)}%`;
+  }
+  return `<div class="board ${opts.small ? 'small' : ''} ${opts.siren ? 'siren' : ''} ${opts.settle ? 'settle' : ''} ${opts.focus != null ? 'zoomed' : ''}" style="${cam}">${cells.join('')}${at ? dice : ''}${centre}</div>`;
 }
 
 // The thing that just happened, shown on EVERY phone under the board: a drawn card, rent
@@ -220,4 +235,15 @@ export function deedCardsHtml(s, id) {
 export function spaceModalWithActions(s, i, acts = []) {
   const btns = acts.map((a) => `<button class="${a.pri ? 'pri' : ''}" data-act="${a.act}" data-space="${a.space}">${a.label}</button>`).join('');
   return `<div class="modal" data-close><div class="modalbox">${spaceHtml(s, i)}${btns ? `<div class="row wrap">${btns}</div>` : ''}<button data-close>Close</button></div></div>`;
+}
+
+// Replace the freshly rendered board with the previous board NODE (keeping its CSS
+// transition state) so the camera glides between frames instead of jumping.
+export function keepBoardNode(root, old) {
+  const neu = root.querySelector('.board');
+  if (!old || !neu || old === neu) return;
+  old.innerHTML = neu.innerHTML;
+  old.className = neu.className;
+  old.setAttribute('style', neu.getAttribute('style') || '');
+  neu.replaceWith(old);
 }

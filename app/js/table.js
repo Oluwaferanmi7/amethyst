@@ -5,7 +5,7 @@
 import { newGame, reduce, player, current, legal } from './rules.js';
 import { TOKENS } from './board.js';
 import { renderHand } from './hand.js';
-import { esc, boardHtml, playersHtml, logHtml, spaceModal, eventHtml, toast, confirmTap } from './render.js';
+import { esc, boardHtml, playersHtml, logHtml, spaceModal, eventHtml, toast, confirmTap, keepBoardNode } from './render.js';
 import { load, save, remove } from './store.js';
 import { sound } from './sound.js';
 import { createPresenter } from './anim.js';
@@ -72,6 +72,7 @@ export function startTable(root, { code, link, fresh, onHome }) {
     const hostPlaying = !!player(v, code);
     const cur = current(v);
     const mine = hostPlaying && !opts.animating && legal(v, code).has('roll') && !v.auction;
+    const oldBoard = root.querySelector('.board');
     root.innerHTML = `
       <div class="table screen">
         <div class="boardwrap">${boardHtml(v, { highlight: cur?.pos, meId: hostPlaying ? code : null, small: ui.small, mine, ...opts })}</div>
@@ -90,6 +91,7 @@ export function startTable(root, { code, link, fresh, onHome }) {
       </div>
       ${ui.menu ? menuHtml(v, online) : ''}
       ${ui.space != null && !hostPlaying ? spaceModal(v, ui.space) : ''}`;
+    keepBoardNode(root, oldBoard);
     if (hostPlaying) {
       renderHand(root.querySelector('.handroot'), v, code, sendLocal, {
         space: ui.space,

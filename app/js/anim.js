@@ -17,6 +17,7 @@ export function createPresenter({ render, onStep }) {
   let view = null;
   let queue = [];
   let busy = false;
+  let diceAt = null; // cell the last throw happened on
 
   async function drain() {
     busy = true;
@@ -43,6 +44,7 @@ export function createPresenter({ render, onStep }) {
   async function present(prev, next) {
     const deltas = cashDeltas(prev, next);
     if (!prev || prev.id !== next.id || prev.phase !== 'play' || next.phase === 'lobby') {
+      diceAt = null;
       render(next, { deltas });
       return;
     }
@@ -57,17 +59,19 @@ export function createPresenter({ render, onStep }) {
 
     const override = {};
     if (diceChanged) {
-      render(prev, { dice: next.dice, rolling: true, override, animating: true });
+      const roller = prev.players[prev.turn];
+      diceAt = roller ? roller.pos : null;
+      render(prev, { dice: next.dice, rolling: true, override, animating: true, diceAt, focus: diceAt, zoom: 1.35 });
       onStep?.('dice');
       await wait(DICE_MS);
     }
     for (const m of moves) {
       if (m.jump) {
         onStep?.('jail');
-        render(prev, { dice: next.dice, override, siren: m.id, animating: true });
+        render(prev, { dice: next.dice, override, siren: m.id, animating: true, diceAt, focus: m.from, zoom: 1.5 });
         await wait(900);
         override[m.id] = m.to;
-        render(prev, { dice: next.dice, override, hop: m.id, siren: m.id, animating: true });
+        render(prev, { dice: next.dice, override, hop: m.id, siren: m.id, animating: true, diceAt, focus: m.to, zoom: 1.5 });
         await wait(900);
         continue;
       }
@@ -77,12 +81,12 @@ export function createPresenter({ render, onStep }) {
       const steps = dir === 1 ? fwd : back;
       for (let k = 1; k <= steps; k++) {
         override[m.id] = (m.from + dir * k + 40) % 40;
-        render(prev, { dice: next.dice, override, hop: m.id, animating: true });
+        render(prev, { dice: next.dice, override, hop: m.id, animating: true, diceAt, focus: override[m.id], zoom: 1.7 });
         onStep?.('hop');
         await wait(k === steps ? HOP_MS * 2 : HOP_MS);
       }
     }
-    render(next, { deltas });
+    render(next, { deltas, diceAt, settle: true });
   }
 
   return {
@@ -92,7 +96,7 @@ export function createPresenter({ render, onStep }) {
     },
     // Re-draw the current view (after a UI-only change) without re-animating.
     redraw() {
-      if (view && !busy) render(view, {});
+      if (view && !busy) render(view, { diceAt });
     },
     get view() {
       return view;

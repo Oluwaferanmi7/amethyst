@@ -4,7 +4,7 @@
 
 import { renderHand } from './hand.js';
 import { current, legal } from './rules.js';
-import { boardHtml, spaceModal, eventHtml, toast } from './render.js';
+import { boardHtml, spaceModal, eventHtml, toast, keepBoardNode } from './render.js';
 import { load, save } from './store.js';
 import { sound } from './sound.js';
 import { createPresenter } from './anim.js';
@@ -52,6 +52,7 @@ export function startPlayer(root, { code, link, tableCode, name, token, onHome }
     const conn = status === 'connected' ? '' : `<div class="connbar">${status === 'notfound' ? `No table with code ${tableCode} yet…` : 'Connecting to the table…'}</div>`;
     const cur = v && v.phase === 'play' ? current(v) : null;
     const mine = !!v && !opts.animating && legal(v, code).has('roll') && !v.auction;
+    const oldBoard = root.querySelector('.board');
     root.innerHTML = `
       <div class="player screen">
         ${v ? `<div class="boardwrap">${boardHtml(v, { highlight: cur?.pos, meId: code, small: ui.small, mine, ...opts })}</div>` : ''}
@@ -66,6 +67,7 @@ export function startPlayer(root, { code, link, tableCode, name, token, onHome }
           <div class="under">${v && !opts.animating ? eventHtml(v, code) : ''}<div class="handroot">${v ? '' : '<p class="muted center">Waiting for the table…</p>'}</div></div>
         </div>
       </div>`;
+    keepBoardNode(root, oldBoard);
     if (v) {
       renderHand(root.querySelector('.handroot'), v, code, send, {
         space: ui.space,

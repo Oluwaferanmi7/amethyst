@@ -342,3 +342,43 @@ body {
   .modalbox .row { margin-top: 4px; }
   .modalbox > button { padding: 8px 12px; }
 }
+
+/* ---- camera: tilt at rest, zoom + pan onto the moving token, ease back out on landing */
+.boardwrap { overflow: hidden; perspective: 1400px; }
+.board {
+  --z: 1; --tx: 0%; --ty: 0%; --tilt: 7deg;
+  transform: rotateX(var(--tilt)) scale(var(--z)) translate(var(--tx), var(--ty));
+  transform-origin: 50% 55%;
+  transition: transform 0.16s linear;
+  will-change: transform;
+}
+.board.zoomed { --tilt: 3deg; }
+.board.settle { transition: transform 0.7s cubic-bezier(0.2, 0.7, 0.2, 1); }
+.board.siren { transition: transform 0.5s ease; }
+.board.small { --tilt: 0deg; }
+/* dice on the board, next to the piece that threw them */
+.dice3d.onboard { position: absolute; transform: translate(-50%, -50%); z-index: 3; height: auto; gap: 8px; pointer-events: none; }
+.dice3d.onboard .dwrap { width: 26px; height: 26px; }
+.dice3d.onboard .cube .f { border-radius: 4px; }
+.dice3d.onboard .cube .front { transform: translateZ(13px); }
+.dice3d.onboard .cube .back { transform: rotateY(180deg) translateZ(13px); }
+.dice3d.onboard .cube .top { transform: rotateX(90deg) translateZ(13px); }
+.dice3d.onboard .cube .bottom { transform: rotateX(-90deg) translateZ(13px); }
+.dice3d.onboard .cube .right { transform: rotateY(90deg) translateZ(13px); }
+.dice3d.onboard .cube .left { transform: rotateY(-90deg) translateZ(13px); }
+.dice3d.onboard .dwrap.rolling { animation-name: tumbleB; }
+.dice3d.onboard .dwrap.rolling.d2 { animation-name: tumbleB2; }
+@keyframes tumbleB {
+  0% { transform: translate(-90px, -70px) scale(0.6); opacity: 0; }
+  10% { opacity: 1; }
+  40% { transform: translate(-30px, 14px) scale(1.15); }
+  70% { transform: translate(-6px, -10px) scale(1); }
+  100% { transform: translate(0, 0); }
+}
+@keyframes tumbleB2 {
+  0% { transform: translate(90px, -60px) scale(0.6); opacity: 0; }
+  10% { opacity: 1; }
+  40% { transform: translate(34px, 16px) scale(1.15); }
+  70% { transform: translate(8px, -8px) scale(1); }
+  100% { transform: translate(0, 0); }
+}
