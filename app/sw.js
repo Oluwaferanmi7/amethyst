@@ -1,6 +1,6 @@
 // Offline cache for the app shell. Stale-while-revalidate: opens instantly, refreshes
 // in the background for the next launch. Bump VERSION on every release.
-const VERSION = 'amethyst-v4';
+const VERSION = 'amethyst-v5';
 const SHELL = [
   './',
   'index.html',

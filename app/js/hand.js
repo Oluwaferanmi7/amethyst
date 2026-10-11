@@ -1,10 +1,12 @@
-// A player's hand, rendered under the board on both the player phone and the table
-// (when the host plays). Kept calm: header with cash + deed chips, the one thing to do
-// now, then trades and the deed list folded away.
+// A player's hand, rendered beside (landscape) or under (portrait) the board, on both the
+// player phone and the table when the host plays. Kept calm: header with cash, the one
+// thing to do now, trades, your deeds as little cards (tap one for details and actions),
+// players, log folded away.
 //
 // renderHand(root, state, myId, send, ui):
 //   send(action)       delivers the action to the table (locally or over the link)
-//   ui.showSpace(i)    opens a deed card
+//   ui.space           index of the deed card currently open (or null)
+//   ui.showSpace(i) / ui.closeSpace()
 //   ui.trade           {open, to, give:{cash,props}, get:{cash,props}} draft kept by the screen
 //   ui.setTrade(t)     replaces the draft and re-renders
 //   ui.animating       true while dice/tokens are moving: no buttons
@@ -12,7 +14,7 @@
 
 import { SPACES, GROUPS, JAIL_FINE } from './board.js';
 import { legal, player, current, owned, debtTotal, canBuild, canSellHouse, canMortgage, canUnmortgage, unmortgageCost, netWorth, alive, tradeText, pendingCard, cardButtonLabel } from './rules.js';
-import { esc, money, diceText, spaceHtml, playersHtml, logHtml, chipsHtml, confirmTap } from './render.js';
+import { esc, money, diceText, spaceHtml, playersHtml, logHtml, deedCardsHtml, spaceModalWithActions, confirmTap } from './render.js';
 
 export function renderHand(root, s, meId, send, ui = {}) {
   const me = player(s, meId);
@@ -35,7 +37,7 @@ export function renderHand(root, s, meId, send, ui = {}) {
   else if (!mine) now = `<p class="waiting">${cur.token} ${esc(cur.name)}'s turn${pd ? '…' : ''}</p>`;
   else if (s.debt) {
     const total = debtTotal(s);
-    now = `<div class="alert"><b>You owe ${money(total)}</b><br><small>${esc(s.debt.reason)}. Sell buildings, mortgage deeds or trade to raise cash.</small></div>
+    now = `<div class="alert"><b>You owe ${money(total)}</b><br><small>${esc(s.debt.reason)}. Tap a deed to sell buildings or mortgage it, or trade, to raise cash.</small></div>
       <div class="row">
         <button class="pri" data-act="payDebt" ${ok.has('payDebt') ? '' : 'disabled'}>Pay ${money(total)}</button>
         <button class="danger" data-act="bankrupt" data-confirm="Tap again: you're out">Bankrupt</button>
@@ -92,39 +94,24 @@ export function renderHand(root, s, meId, send, ui = {}) {
     trade = `<button class="sm wide" data-trade-open>🤝 Propose a trade</button>`;
   }
 
-  // ---- deeds, grouped by colour (folded by default; chips above give the overview)
+  // ---- your deeds as cards; the open one gets its actions in a sheet
   const mineProps = owned(s, meId);
-  const byGroup = new Map();
-  for (const i of mineProps) {
-    const g = SPACES[i].group || SPACES[i].type;
-    if (!byGroup.has(g)) byGroup.set(g, []);
-    byGroup.get(g).push(i);
-  }
   const canAct = mine && !s.auction && !ui.animating;
-  const deeds = mineProps.length
-    ? [...byGroup]
-        .map(([g, list]) => {
-          const color = GROUPS[g]?.color || (g === 'rail' ? '#999' : '#bbb');
-          const label = GROUPS[g]?.name || (g === 'rail' ? 'Stations' : 'Utilities');
-          const full = GROUPS[g] && list.length === SPACES.filter((x) => x.group === g).length;
-          return `<div class="grp"><div class="gh" style="--c:${color}">${label}${full ? ' · full set' : ''}</div>${list
-            .map((i) => {
-              const sp = SPACES[i];
-              const pr = s.props[i];
-              const tag = pr.mortgaged ? '<small class="mort">mortgaged</small>' : pr.houses === 5 ? '<small class="hot">hotel</small>' : pr.houses ? `<small class="hs">${'▮'.repeat(pr.houses)}</small>` : '';
-              const btns = [];
-              if (canAct && !s.debt && canBuild(s, meId, i)) btns.push(`<button class="sm" data-act="build" data-space="${i}">+ ${pr.houses === 4 ? 'Hotel' : 'House'} ${money(sp.houseCost)}</button>`);
-              if (canAct && canSellHouse(s, meId, i)) btns.push(`<button class="sm" data-act="sellHouse" data-space="${i}">Sell ${money(sp.houseCost / 2)}</button>`);
-              if (canAct && canMortgage(s, meId, i)) btns.push(`<button class="sm" data-act="mortgage" data-space="${i}">Mortgage ${money(sp.price / 2)}</button>`);
-              if (canAct && !s.debt && canUnmortgage(s, meId, i)) btns.push(`<button class="sm" data-act="unmortgage" data-space="${i}">Lift ${money(unmortgageCost(i))}</button>`);
-              return `<div class="deed"><span class="dn" data-info="${i}">${esc(sp.name)} ${tag}</span><span class="db">${btns.join('')}</span></div>`;
-            })
-            .join('')}</div>`;
-        })
-        .join('')
-    : '<p class="muted">No deeds yet.</p>';
-  const canBuildAny = canAct && mineProps.some((i) => canBuild(s, meId, i));
-  const openDeeds = ui.deedsOpen || canBuildAny || (s.debt && mine);
+  const canBuildAny = canAct && !s.debt && mineProps.some((i) => canBuild(s, meId, i));
+  let modal = '';
+  if (ui.space != null) {
+    const i = ui.space;
+    const acts = [];
+    if (s.props[i]?.owner === meId && canAct) {
+      const sp = SPACES[i];
+      const pr = s.props[i];
+      if (!s.debt && canBuild(s, meId, i)) acts.push({ act: 'build', space: i, pri: true, label: `Build ${pr.houses === 4 ? 'hotel' : 'house'} ${money(sp.houseCost)}` });
+      if (canSellHouse(s, meId, i)) acts.push({ act: 'sellHouse', space: i, label: `Sell building ${money(sp.houseCost / 2)}` });
+      if (canMortgage(s, meId, i)) acts.push({ act: 'mortgage', space: i, label: `Mortgage for ${money(sp.price / 2)}` });
+      if (!s.debt && canUnmortgage(s, meId, i)) acts.push({ act: 'unmortgage', space: i, label: `Lift mortgage ${money(unmortgageCost(i))}` });
+    }
+    modal = spaceModalWithActions(s, i, acts);
+  }
 
   const d = (ui.deltas || []).find((x) => x.id === meId);
   const fl = d ? `<span class="float ${d.delta > 0 ? 'up' : 'down'}">${d.delta > 0 ? '+' : '−'}${money(Math.abs(d.delta))}</span>` : '';
@@ -136,13 +123,13 @@ export function renderHand(root, s, meId, send, ui = {}) {
         <div><div class="nm">${esc(me.name)}</div><div class="sub">${esc(SPACES[me.pos].name)}${me.inJail ? ' · in Jail' : ''}${me.jailFree ? ` · ${me.jailFree} jail card` : ''}</div></div>
         <div class="cash"><div>${money(me.cash)}${fl}</div><small>worth ${money(netWorth(s, meId))}</small></div>
       </header>
-      ${chipsHtml(s, meId)}
       <section class="now">${now}</section>
       ${trade ? `<section class="tradebox">${trade}</section>` : ''}
-      <details class="deedbox" ${openDeeds ? 'open' : ''} data-deeds><summary>My deeds (${mineProps.length})${canBuildAny ? ' · you can build' : ''}</summary><section class="deeds">${deeds}</section></details>
+      <section class="mydeeds"><div class="gh">My deeds (${mineProps.length})${canBuildAny ? ' · you can build' : ''}</div>${deedCardsHtml(s, meId)}</section>
       ${playersHtml(s, meId, ui.deltas)}
       <details class="logbox"><summary>Log</summary>${logHtml(s, 40)}</details>
-    </div>`;
+    </div>
+    ${modal}`;
 
   wire(root, s, meId, send, ui);
 }
@@ -206,8 +193,8 @@ function wire(root, s, meId, send, ui) {
     else b.addEventListener('click', fire);
   });
   root.querySelectorAll('[data-info]').forEach((el) => el.addEventListener('click', () => ui.showSpace?.(Number(el.dataset.info))));
+  root.querySelectorAll('[data-close]').forEach((b) => b.addEventListener('click', (e) => { if (e.target === b) ui.closeSpace?.(); }));
   root.querySelector('[data-bid-input]')?.addEventListener('input', (e) => { ui.bid = e.target.value; });
-  root.querySelector('[data-deeds]')?.addEventListener('toggle', (e) => { ui.deedsOpen = e.target.open; });
 
   // Trade form: keep the draft in ui.trade so re-renders don't lose ticks.
   const draft = () => ui.trade || EMPTY();

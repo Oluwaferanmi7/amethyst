@@ -74,21 +74,26 @@ export function startTable(root, { code, link, fresh, onHome }) {
     const mine = hostPlaying && !opts.animating && legal(v, code).has('roll') && !v.auction;
     root.innerHTML = `
       <div class="table screen">
-        <header class="th">
-          <button class="lnk" data-home>‹</button>
-          <div class="codepill">Table <b>${code}</b> · ${online.size} phone${online.size === 1 ? '' : 's'}</div>
-          <span><button class="lnk" data-small title="Board size">${ui.small ? '⤢' : '⤡'}</button><button class="lnk" data-mute>${sound.muted ? '🔇' : '🔊'}</button><button class="lnk" data-menu>⋯</button></span>
-        </header>
         <div class="boardwrap">${boardHtml(v, { highlight: cur?.pos, meId: hostPlaying ? code : null, small: ui.small, mine, ...opts })}</div>
-        <div class="under">
-          ${opts.animating ? '' : eventHtml(v, hostPlaying ? code : null)}
-          ${hostPlaying ? '<div class="handroot"></div>' : `${playersHtml(v, null, opts.deltas)}<details class="logbox" open><summary>Log</summary>${logHtml(v, 30)}</details>`}
+        <div class="side">
+          <header class="th">
+            <button class="lnk" data-home>‹</button>
+            <div class="codepill">Table <b>${code}</b> · ${online.size} phone${online.size === 1 ? '' : 's'}</div>
+            <span><button class="lnk" data-small title="Board size">${ui.small ? '⤢' : '⤡'}</button><button class="lnk" data-mute>${sound.muted ? '🔇' : '🔊'}</button><button class="lnk" data-menu>⋯</button></span>
+          </header>
+          <div class="rotate-hint">Turn your phone sideways for the full table</div>
+          <div class="under">
+            ${opts.animating ? '' : eventHtml(v, hostPlaying ? code : null)}
+            ${hostPlaying ? '<div class="handroot"></div>' : `${playersHtml(v, null, opts.deltas)}<details class="logbox" open><summary>Log</summary>${logHtml(v, 30)}</details>`}
+          </div>
         </div>
       </div>
       ${ui.menu ? menuHtml(v, online) : ''}
-      ${ui.space != null ? spaceModal(v, ui.space) : ''}`;
+      ${ui.space != null && !hostPlaying ? spaceModal(v, ui.space) : ''}`;
     if (hostPlaying) {
       renderHand(root.querySelector('.handroot'), v, code, sendLocal, {
+        space: ui.space,
+        closeSpace: () => { ui.space = null; redraw(); },
         showSpace: (i) => { ui.space = i; redraw(); },
         trade: ui.trade,
         setTrade: (t) => { ui.trade = t; redraw(); },

@@ -54,18 +54,22 @@ export function startPlayer(root, { code, link, tableCode, name, token, onHome }
     const mine = !!v && !opts.animating && legal(v, code).has('roll') && !v.auction;
     root.innerHTML = `
       <div class="player screen">
-        <header class="th">
-          <button class="lnk" data-home>‹ Leave</button>
-          <div class="codepill">Table <b>${tableCode}</b></div>
-          <span><button class="lnk" data-small title="Board size">${ui.small ? '⤢' : '⤡'}</button><button class="lnk" data-mute>${sound.muted ? '🔇' : '🔊'}</button></span>
-        </header>
-        ${conn}
         ${v ? `<div class="boardwrap">${boardHtml(v, { highlight: cur?.pos, meId: code, small: ui.small, mine, ...opts })}</div>` : ''}
-        <div class="under">${v && !opts.animating ? eventHtml(v, code) : ''}<div class="handroot">${v ? '' : '<p class="muted center">Waiting for the table…</p>'}</div></div>
-        ${ui.space != null && v ? spaceModal(v, ui.space) : ''}
+        <div class="side">
+          <header class="th">
+            <button class="lnk" data-home>‹ Leave</button>
+            <div class="codepill">Table <b>${tableCode}</b></div>
+            <span><button class="lnk" data-small title="Board size">${ui.small ? '⤢' : '⤡'}</button><button class="lnk" data-mute>${sound.muted ? '🔇' : '🔊'}</button></span>
+          </header>
+          ${conn}
+          <div class="rotate-hint">Turn your phone sideways for the full table</div>
+          <div class="under">${v && !opts.animating ? eventHtml(v, code) : ''}<div class="handroot">${v ? '' : '<p class="muted center">Waiting for the table…</p>'}</div></div>
+        </div>
       </div>`;
     if (v) {
       renderHand(root.querySelector('.handroot'), v, code, send, {
+        space: ui.space,
+        closeSpace: () => { ui.space = null; redraw(); },
         showSpace: (i) => { ui.space = i; redraw(); },
         trade: ui.trade,
         setTrade: (t) => { ui.trade = t; redraw(); },

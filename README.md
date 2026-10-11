@@ -1,13 +1,13 @@
 # Amethyst
 
-A property-trading board game for phones. One phone is the **table** (shows the board and runs the rules); friends **join with its four-letter code**. Phones talk to each other directly over WebRTC (PeerJS), so there's no server, no account and nothing to host beyond these static files.
+A property-trading board game for phones, with places from the Bible (Bethlehem to Jerusalem, the Emmaus Road, Jacob's Well). One phone is the **table** (shows the board and runs the rules); friends **join with its four-letter code**. Phones talk to each other directly over WebRTC (PeerJS), so there's no server, no account and nothing to host beyond these static files.
 
 ## Play
 
 1. Open the app on every phone (add it to the home screen if you like).
 2. One phone taps **Host a table** and reads out its code. The host can tap **I'm playing too** to take a seat.
 3. Everyone else taps **Join**, types the code and a name, picks a token.
-4. The table taps **Start game**. Every phone shows the board on top and that player's hand under it. On your turn tap Roll (or your own piece on the board): the dice tumble, your token hops square by square, and whatever you land on comes up as a card or a banner with one button: Buy / Pass, Pay rent, Pay tax, or the Chance / Community Chest card with Collect, Pay or Go. The ⤡ button shrinks the board, 🔊 mutes the sounds.
+4. The table taps **Start game**. **Hold the phone sideways**: the board fills the left, your hand (cash, what to do now, your deeds as cards) sits on the right. Upright still works with the hand below the board. On your turn tap Roll (or your own piece on the board): the dice tumble, your token hops square by square, and whatever you land on comes up as a card or a banner with one button: Buy / Pass, Pay rent, Pay tax, or the Chance / Community Chest card with Collect, Pay or Go. The ⤡ button shrinks the board, 🔊 mutes the sounds.
 
 Everyone needs internet. A phone that locks or loses signal reconnects on its own and lands back in the same seat.
 

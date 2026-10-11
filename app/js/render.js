@@ -43,12 +43,13 @@ export function boardHtml(s, opts = {}) {
     const style = `grid-column:${col};grid-row:${row};${owner ? `--owner:${owner.color}` : ''}`;
     let top = '';
     if (sp.type === 'street') top = `<i class="bar" style="background:${GROUPS[sp.group].color}"></i>`;
-    else if (sp.type === 'utility') top = `<i class="ic">${sp.name.startsWith('Water') ? '🚰' : '⚡'}</i>`;
+    else if (sp.type === 'utility') top = `<i class="ic">${sp.name.startsWith('Jacob') ? '🚰' : '🕯️'}</i>`;
     else top = `<i class="ic">${ICON[sp.type]}</i>`;
-    let mid = '';
-    if (pr?.houses === 5) mid = '<b class="hotel"></b>';
-    else if (pr?.houses) mid = `<span class="houses">${'<b></b>'.repeat(pr.houses)}</span>`;
-    else if (sp.price && !pr) mid = `<small>${sp.price}</small>`;
+    const named = sp.type === 'street' || sp.type === 'rail' || sp.type === 'utility' || sp.type === 'tax';
+    let mid = named ? `<span class="nm">${esc(sp.name)}</span>` : '';
+    if (pr?.houses === 5) mid += '<b class="hotel"></b>';
+    else if (pr?.houses) mid += `<span class="houses">${'<b></b>'.repeat(pr.houses)}</span>`;
+    else if (sp.price && !pr) mid += `<small>${sp.price}</small>`;
     const here = s.players.filter((p) => !p.bankrupt && posOf(p) === i);
     const tok = (p) => `<em style="--c:${p.color}" title="${esc(p.name)}" class="${opts.hop === p.id ? 'hop' : ''} ${p.id === opts.meId ? 'me' : ''}" data-token="${p.id}">${p.token}</em>`;
     let toks = '';
@@ -196,4 +197,27 @@ export function confirmTap(button, label, action) {
       button.innerHTML = was;
     }, 3000);
   });
+}
+
+// Owned deeds as little property cards (the hand's main view of what you own).
+export function deedCardsHtml(s, id) {
+  const mine = Object.keys(s.props).map(Number).filter((i) => s.props[i].owner === id).sort((a, b) => a - b);
+  if (!mine.length) return '<p class="muted small">No deeds yet. Land on a place and buy it.</p>';
+  return `<div class="deedcards">${mine
+    .map((i) => {
+      const sp = SPACES[i];
+      const pr = s.props[i];
+      const color = sp.group ? GROUPS[sp.group].color : sp.type === 'rail' ? '#4a4a5a' : '#2f7f99';
+      const status = pr.mortgaged ? 'MORTGAGED' : pr.houses === 5 ? 'HOTEL' : pr.houses ? '▮'.repeat(pr.houses) : '';
+      const line = sp.type === 'street' ? `rent ${money(rentAt(s, i, [3, 4]))}` : sp.type === 'rail' ? 'road' : 'utility';
+      return `<button class="deedcard ${pr.mortgaged ? 'mort' : ''}" style="--c:${color}" data-info="${i}"><span class="dc-head">${esc(sp.name)}</span><span class="dc-body">${status ? `<b>${status}</b>` : line}</span></button>`;
+    })
+    .join('')}</div>`;
+}
+
+// Deed card plus the actions its owner can take right now (build, sell, mortgage, lift).
+// `acts` is a list of { act, label, space } the hand computed; empty for other people's deeds.
+export function spaceModalWithActions(s, i, acts = []) {
+  const btns = acts.map((a) => `<button class="${a.pri ? 'pri' : ''}" data-act="${a.act}" data-space="${a.space}">${a.label}</button>`).join('');
+  return `<div class="modal" data-close><div class="modalbox">${spaceHtml(s, i)}${btns ? `<div class="row wrap">${btns}</div>` : ''}<button data-close>Close</button></div></div>`;
 }

@@ -17,8 +17,11 @@ A property-trading board game (Monopoly-styled, own street names) for phones. On
 
 - **2026-10-11 fixes from his first look:** dice showed 1:1 during the spin then snapped to the throw (the spin keyframes ended at zero rotation = face 1) → each face sets --fx/--fy and the spin ends on that orientation (verified: spinning cube's final transform === static cube's). Jail: siren sound (4 sweeps) + red/blue flash over the board + "🚔 X goes to Jail!" notice, ~1.8 s, before the token appears in the cell.
 
+- **2026-10-11 afternoon (from his landscape photo):** places renamed after the Bible (`board.js`: brown Bethlehem/Nazareth · sky Jericho/Capernaum/Bethany · pink Hebron/Shiloh/Bethel · orange Samaria/Galilee/Joppa · red Damascus/Antioch/Ephesus · yellow Corinth/Philippi/Smyrna · green Babylon/Nineveh/Tyre · indigo Zion/Jerusalem · roads Emmaus Road, King's Highway, Via Maris, Appian Way · Lampstand + Jacob's Well · Temple Tax, Caesar's Tribute · Oasis). Names now printed on the cells (tiny bold, no mid-word breaks). **Landscape is the designed layout**: board fills the left (height-bound), the hand is a scrolling column on the right, safe-area insets on both sides for the Dynamic Island; manifest orientation = landscape; portrait still works with a "turn your phone sideways" hint. Felt table background + framed board with shadow. Deeds are now little **property cards** in the hand; tapping one opens a sheet with the deed info and its actions (build / sell / mortgage / lift), so the long deed list is gone. Sheet scrolls on short screens.
+- Verified at 844×390 in two tabs: layout, names, Bob buys → card appears → tap → sheet with "Mortgage for $60", sheet fits/scrolls, Close reachable.
+
 ## Next
-1. Feranmi plays a real game with the new build.
+1. Feranmi plays a real game with the new build (sideways!).
 2. Ideas not started: token movement sound per step is a plain tick (could be nicer), bank housing limit (32/12), trade history, a timer for slow bidders, locations/theme for street names (he mentioned it, then parked it).
 
 ## Dev notes
